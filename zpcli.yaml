@@ -1,0 +1,86 @@
+commands:
+- actions:
+  - zpcli "kubectl get $1 -A"
+  list-command: kubectl api-resources
+  replace: s/([a-z])s /\1
+  search: pod
+- actions:
+  - kubectl describe pod $2 --namespace=$1
+  - kubectl logs $2 --namespace $1
+  - kubectl delete pod $2 --namespace=$1
+  - kubectl logs -f $2  --namespace=$1
+  - kubectl port-forward $2 K8S:LOCAL --namespace=$1
+  - kubectl exec -it $2 --namespace=$1 -- sh
+  list-command: kubectl get pod -A
+- actions:
+  - kubectl describe secret $2 --namespace=$1
+  - kubectl delete secret $2 --namespace=$1
+  list-command: kubectl get secret -A
+- actions:
+  - kubectl describe service $2  --namespace=$1
+  - kubectl delete service $2 --namespace=$1
+  - kubectl logs -f $2 --namespace=$1
+  list-command: kubectl get service -A
+- actions:
+  - kubectl describe configmap $2 --namespace=$1
+  - kubectl delete configmap $2 --namespace=$1
+  list-command: kubectl get configmap -A
+- actions:
+  - kubectl describe event $2 --namespace=$1
+  list-command: kubectl get events -A
+- actions:
+  - export K_NAMESPACE="$1"
+  - kubectl config set-context --current --namespace="$1"
+  - kubectl get pod --namespace="$1"
+  - kubectl get deployment --namespace="$1"
+  - kubectl get sercet --namespace="$1"
+  - kubectl get app --namespace="$1"
+  - kubectl describe namespace $1
+  - zpcli "kubectl get all" "" "--namespace=$1"
+  list-command: kubectl get namespace -A
+- actions:
+  - cat $1
+  - vim $1
+  - tail -f $1
+  list-command: ls
+- actions:
+  - zpcli "$1 $2 $3"
+  list-command: cat /home/zbona/bin/docker-commands
+- actions:
+  - docker stop $1
+  - docker rm $1
+  - docker restart $1
+  - docker logs $1
+  - docker exec -it $1 bash
+  - docker exec -it $1 sh
+  - docker container prune
+  - docker stop $1 $2
+  - docker stop $1; docker rm $1; docker rmi $2
+  list-command: docker ps -a
+- actions:
+  - docker rmi $3
+  - docker push $2
+  - docker image prune
+  list-command: docker images
+- actions:
+  - diff --side-by-side $2 $4
+  - vim -p $2 $4
+  - vimdiff $2 $4
+  list-command: diff --recursive --brief
+- actions:
+  - cat $1
+  - tail $1
+  - vim $1
+  list-command: find .
+- actions:
+  - kubectl describe servicemonitor $2 --namespace=$1
+  list-command: kubectl get servicemonitor -A
+- actions:
+  - kubectl describe $1 $2 --namespace=$ns
+  list-command: kubectl get all
+  replace: s/\//  /
+- actions:
+  - vim $1
+  - cat $1
+  list-command: grep -R
+  separator: ':'
