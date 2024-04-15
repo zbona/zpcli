@@ -20,5 +20,7 @@ zpcli "cat /path/to/my.csv"
 etc
 ```
 
+### Examples:
+
 ![Zpcli example.](images/zpcli-example.png)
 ![Zpcli help.](images/zpcli-help.png)
