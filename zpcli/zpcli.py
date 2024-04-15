@@ -99,11 +99,20 @@ class Zpcli:
         print_gray(" - press Enter to use last", False)
         print_green(" [" + str(self.C_LAST_ITEM) + "]: ", False)
         item = input()
+        if str(item).find("-") != -1:
+            range_arr = item.split("-")
+            item = ""
+            it = range(int(range_arr[0]), int(range_arr[1]) + 1)
+            print(it)
+            for i in it:
+                item = item + " " + str(i)
         if item == "":
             item = " ".join(self.C_LAST_ITEM)
             print()
         else:
             self.C_LAST_ITEM = item.split(" ")
+        item = item.strip()
+        print(item)
         return item.split(" ")
 
     def add_action_command(self, command):
