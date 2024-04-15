@@ -6,13 +6,17 @@ import sys
 import os
 
 
-def print_status_line(zpcli):
+def print_list_items(zpcli):
     arg_command, arg_actions, arg_param1, arg_param2 = get_params()
-    print(f"ZPCLI ")
     zpcli.process_list_lines(arg_command, arg_param1, arg_param2)
     zpcli.print_list(arg_command, arg_param1, arg_param2)
+    #:w
+    # zpcli.print_list_rich()
 
     print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+
+def print_status_line(zpcli):
+    arg_command, arg_actions, arg_param1, arg_param2 = get_params()
     print(f"ZPCLI: ", end="")
     print_yellow(f"{arg_command} {arg_param1} {arg_param2}", False)
     print(">> Filter: ", end="")
@@ -60,14 +64,19 @@ def main():
         zpcli.load_variables()
 
         print_status_line(zpcli)
+        print_list_items(zpcli)
+        print_status_line(zpcli)
 
         zpcli.print_commands(arg_command)
-        action = zpcli.input_action()
+        action = zpcli.input_action().strip()
 
         action_key = 0
         if action[0] == "/":
             """ search  """
             zpcli.C_SEARCH = action[1:]
+            continue
+        elif action == "bash":
+            os.system("bash")
             continue
         elif action.startswith("!"):
             zpcli.C_LIST_COMMAND = action[1:]
@@ -78,12 +87,6 @@ def main():
             continue
         elif action[0] == ":":
             """ command - separator, save config, record, history, help, edit command """
-            # supported_commands = ["help", "save-config", "config", "set", "get", "confirm", "noconfirm", "sep", "sort", "uniq"]
-            # if action[1:] not in supported_commands:
-            #     print("Command " + action[1:] + " not implemented. Supported commands are:")
-            #     print(supported_commands)
-            #     input()
-            #     continue
             if action[1:] == "help":
                 zpcli.action_help()
             elif action[1:].startswith("sort"):
@@ -97,8 +100,12 @@ def main():
                 os.system("vim " + zpcli.config_file)
                 zpcli.read_conf()
             elif action[1:].startswith("get"):
-                print(zpcli.C_VARIABLES)
+                print_list(zpcli.C_VARIABLES)
                 input()
+            elif action[1:].startswith("set-local"):
+                variable_tmp = action.replace(":set-local ", "").strip()
+                variable = variable_tmp.split("=")
+                zpcli.C_VARIABLES_LOCAL[variable[0]] = variable[1]
             elif action[1:].startswith("set "):
                 variable_tmp = action.replace(":set ", "").strip()
                 variable = variable_tmp.split("=")
@@ -127,8 +134,13 @@ def main():
             """ exit """
             sys.exit()
         else:
-            """ run normal action """
-            action_key = action
+            if action.isnumeric():
+                """ run normal action """
+                action_key = action
+            else:
+                print("ERROR")
+                print(action)
+                input()
 
         items = zpcli.input_items()
         if items[0] == "q":
@@ -142,16 +154,22 @@ def main():
                 zpcli.C_LAST_ITEM.append(str(i))
         # print("items")
         # print(items)
-        zpcli.save_variable("SUM", 0)
+        # zpcli.save_variable("SUM", 0)
 
         for item_key in items:
             try:
-                zpcli.run_command(action_key, item_key)
+                can_continue = zpcli.run_command(action_key, item_key)
+                if can_continue == False:
+                    break
             except Exception as exc:
                 print(exc)
 
         print("... press Enter to continue ...")
         x = input()
+
+
+def print_list(mydict):
+    print("\n".join("{} = {}".format(k, v) for k, v in sorted(mydict.items(), key=lambda t: str(t[0]))))
 
 
 def get_params():

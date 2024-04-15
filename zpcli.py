@@ -1,8 +1,20 @@
 import os
 import subprocess
 import re
+import sys
+
 import yaml
 from zpoutput import print_green, print_red, print_yellow, print_gray, print_blue, rlinput
+from rich.table import Table
+from rich.console import Console
+import readline
+
+import logging
+
+LOG_FILENAME = '/tmp/completer.log'
+logging.basicConfig(filename=LOG_FILENAME,
+                    level=logging.DEBUG,
+                    )
 
 
 class Zpcli:
@@ -21,7 +33,10 @@ class Zpcli:
     C_LAST_ITEM = []
     C_MODIFY_COMMAND = False
     C_VARIABLES = {}
+    C_VARIABLES_LOCAL = {}
     C_SORT = ""
+    C_ZPCLI_COMMANDS = [":help", ":set", ":set-local", ":get", ":sort", ":sep=", ":confirm", ":save-config", "q",
+                        ":noconfirm", ":config", "/", "s//", "+cat $1"]
     CONFIG = {}
     config_file = ""
     variable_file = ""
@@ -32,15 +47,42 @@ class Zpcli:
         self.config_file = os.path.expanduser("~") + "/.zpcli.yaml"
         self.variable_file = os.path.expanduser("~") + "/.zpcli-vars.yaml"
 
+    def zpcli_complete(self, text, state):
+        """ """
+        line = readline.get_line_buffer().split()
+
+        results = []
+        if line[0] == ":set" or line[0] == ":set-local":
+            # logging.debug("line", line)
+            variable_name = line[1]
+            # logging.debug("variavle", variable_name)
+            for c in self.C_VARIABLES:
+                if c.startswith(variable_name):
+                    results.append(line[0] + " " + c)
+        else:
+            results = [c + ' ' for c in self.C_ZPCLI_COMMANDS if c.startswith(line[0].strip())]
+
+        logging.debug("text %s", text)
+        logging.debug("state %s", state)
+        return results[state]
+
     def input_action(self):
         """ input actio """
         print_yellow(
             "\"Type \"q\" to quit; type \"/<string>\" to filter list; \":help\" to more information")
         print_red("Action ", False)
         print_gray(" - Press ENTER to use last action ", False)
-        print_red("[" + self.C_LAST_ACTION + "]: ", False)
+        print_red("\[" + self.C_LAST_ACTION + "]: ", False)
+
+        readline.set_completer_delims('\t')
+        readline.parse_and_bind("tab: complete")
+
+        readline.set_completer(self.zpcli_complete)
 
         action = input()
+
+        print(action)
+
         if action == "":
             action = self.C_LAST_ACTION
         else:
@@ -48,7 +90,8 @@ class Zpcli:
         return action
 
     def get_params(self):
-        return self.params["arg_command"], self.params["arg_actions"], self.params["arg_param1"], self.params["arg_param2"]
+        return self.params["arg_command"], self.params["arg_actions"], self.params["arg_param1"], self.params[
+            "arg_param2"]
 
     def input_items(self):
         """ input itens """
@@ -122,6 +165,8 @@ class Zpcli:
                     self.C_VARIABLES = vars
         except yaml.YAMLError as exc:
             print(exc)
+        for var in self.C_VARIABLES_LOCAL:
+            self.C_VARIABLES[var] = self.C_VARIABLES_LOCAL[var]
 
     def get_list_command_output(self, list_command, param1, param2):
 
@@ -189,6 +234,25 @@ class Zpcli:
         with open(self.variable_file, "w") as var_file:
             var_file.write(yaml.dump(self.C_VARIABLES))
 
+    def print_list_rich(self):
+        console = Console()
+        table = Table(show_header=True, header_style="bold magenta")
+        for i in range(len(self.C_SELECTED_COMMAND_ITEMS[1])):
+            table.add_column(str(i))
+
+        print(self.C_SELECTED_COMMAND_ITEMS[1])
+        cols = re.split(rf"{self.C_SEPARATOR}", self.C_SELECTED_COMMAND_ITEMS[2])
+        print(cols)
+        table.add_row(cols)
+
+        console.print(table)
+        sys.exit()
+        for row in self.C_SELECTED_COMMAND_ITEMS:
+            cols = re.split(rf"{self.C_SEPARATOR}", row)
+            table.add_row(**cols)
+
+        console.print(table)
+
     def print_list(self, list_command, param1, param2):
         """ print list """
         print("================================================")
@@ -234,10 +298,28 @@ class Zpcli:
         run_cmd = run_cmd.replace("$param1", arg_param1)
         run_cmd = run_cmd.replace("$param2", arg_param2)
 
+        # selected_items_array = {}
+        # print(self.C_SELECTED_COMMAND_ITEMS)
+        # for si in self.C_SELECTED_COMMAND_ITEMS:
+        #     print('xxx')
+        #     for ii in range(1, 20):
+        #         print('yyy')
+        #         print(si)
+        #         print(ii)
+        #         selected_items_array[ii][si] = self.get_selected_items_col(si, ii - 1)
+        #         print(selected_items_array)
+
+        can_continue = True
+        # print('aaa')
+        # print(selected_items_array)
         for i in range(1, 20):
             selected_item = self.get_selected_items_col(item_key, i - 1)
             if selected_item != "" and selected_item is not None:
                 run_cmd = run_cmd.replace("$" + str(i), selected_item)
+                # all chosen rows as command params
+                # if run_cmd.find("$$" + str(i)) != -1:
+                #     run_cmd = run_cmd.replace(" $$" + str(i), " ".join(selected_items_array[i]))
+                #     can_continue = False
             else:
                 run_cmd = run_cmd.replace(" $" + str(i), "")
 
@@ -246,6 +328,9 @@ class Zpcli:
             run_cmd = run_cmd.replace("$" + key, str(self.C_VARIABLES[key]))
 
         run_cmd = run_cmd.replace("=>", "; ")
+
+        if self.C_VARIABLES["command-wrapper"] and self.C_VARIABLES["cw-enabled"]:
+            run_cmd = self.C_VARIABLES["command-wrapper"].replace("<command>", run_cmd)
 
         # print(self.C_VARIABLES["SUM"])
         print_blue(run_cmd)
@@ -271,6 +356,7 @@ class Zpcli:
                 output = os.system(run_cmd)
 
             print(output)
+            return can_continue
 
     def action_save_config(self):
         conf_file = self.config_file
@@ -300,7 +386,8 @@ ACTIONS:
 /               remove filter
 s/search/repl   'search' will be replaced by 'repl' in the output
 s//             remove/reset replacement
-:set var=value  set variable called "var" with "value" as value. You can use it in your commands as $var then
+:set var=value  set global variable called "var" with "value" as value. You can use it in your commands as $var then
+:set-local v=x  set LOCAL variable called "v" with "x" as value. This value is used just for current zpcli instance
 :get            get all set variables
 +cat $1 $2 $var action command will be added to commands taken from yaml configuration (just for this time)
                 $1 - will be replaced by value in 1st column of selected item(s)
@@ -345,5 +432,3 @@ ITEMS:
                 result_string = result_string + " " + cols[col_number]
 
         return result_string.strip()
-
-

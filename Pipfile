@@ -5,7 +5,8 @@ name = "pypi"
 
 [packages]
 colorama = "*"
-yaml = "*"
+pyyaml = "*"
+rich = "*"
 
 [dev-packages]
 
