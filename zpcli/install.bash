@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash                                                                                                                                                                                                   
 
 if [ ! -f "./zpcli.py" ]; then
   echo "you need to switch to directory with zpcli.py application."
@@ -12,14 +12,14 @@ fi
 
 if [ "$(whereis pip | grep bin)" == "" ]; then
   echo "no pip, need to install.."
-  apt install pip
+  apt install pip 
 fi
 
 
-APP_DIR=$HOME/bin/zpcli-app
+APP_DIR=$HOME/bin/zpcli-app/zpcli
 
 rm -rf $HOME/bin/zpcli-app
-mkdir -p  $HOME/bin/zpcli-app
+mkdir -p  $APP_DIR
 cp ./* ${APP_DIR}/
 
 if [ -f ${HOME}/zpcli.yaml ]; then
@@ -34,5 +34,5 @@ pipenv install
 pipenv update
 
 rm -rf $HOME/bin/zpcli
-ln -s $HOME/bin/zpcli-app/main.py ../zpcli
+ln -s $APP_DIR/main.py ~/bin/zpcli
 chmod ugo+x ../zpcli
