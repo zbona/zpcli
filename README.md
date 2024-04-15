@@ -6,7 +6,7 @@ Linux command line tool for output filtering and interactive commands execution.
 
 ```
 git clone git@github.com:zbona/zpcli.git
-cd zpcli
+cd zpcli/zpcli
 ./install.bash
 ```
 ### Usage:
