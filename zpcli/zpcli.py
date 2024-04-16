@@ -277,7 +277,7 @@ class Zpcli:
                 print_green(star + str(i) + ": " + line)
             else:
                 print_green(star + str(i) + ": ", False)
-                print(" " + line)
+                print(line)
 
     def print_commands(self, list_command):
         commands = self.search_commnad_config(list_command)["actions"]
@@ -334,6 +334,12 @@ class Zpcli:
 
         for key in self.C_VARIABLES:
             # print(key)
+            if run_cmd.find("$" + key) != -1:
+                print_red("realy use (y/n)?")
+                print(key + " = " + self.C_VARIABLES[key])
+                x = input()
+                if x != "y":
+                    return 0
             run_cmd = run_cmd.replace("$" + key, str(self.C_VARIABLES[key]))
 
         run_cmd = run_cmd.replace("=>", "; ")

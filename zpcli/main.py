@@ -58,6 +58,11 @@ def main():
                     zpcli.C_SEARCH = command_config["search"]
                 if "replace" in command_config.keys():
                     zpcli.C_REPLACE = command_config["replace"]
+                if "modify" in command_config.keys():
+                    if command_config["modify"] == "1":
+                        zpcli.C_MODIFY_COMMAND = True
+                    else:
+                        zpcli.C_MODIFY_COMMAND = False
 
         just_opened = False
 
@@ -108,7 +113,7 @@ def main():
                 zpcli.C_VARIABLES_LOCAL[variable[0]] = variable[1]
             elif action[1:].startswith("set "):
                 variable_tmp = action.replace(":set ", "").strip()
-                variable = variable_tmp.split("=")
+                variable = variable_tmp.split("=", 1)
                 zpcli.save_variable(variable[0], variable[1])
                 print(zpcli.C_VARIABLES)
                 input()
