@@ -10,6 +10,7 @@ from rich.console import Console
 import readline
 
 import logging
+from rich import print
 
 LOG_FILENAME = '/tmp/completer.log'
 logging.basicConfig(filename=LOG_FILENAME,
@@ -36,6 +37,7 @@ class Zpcli:
     C_VARIABLES_LOCAL = {}
     C_SORT = ""
     C_ZPCLI_COMMANDS = [":help", ":set", ":set-local", ":get", ":sort", ":sep=", ":confirm", ":save-config", "q",
+                        ":cd", ":pwd",
                         ":noconfirm", ":config", "/", "s//", "+cat $1"]
     CONFIG = {}
     config_file = ""
@@ -46,6 +48,21 @@ class Zpcli:
         """ init """
         self.config_file = os.path.expanduser("~") + "/.zpcli.yaml"
         self.variable_file = os.path.expanduser("~") + "/.zpcli-vars.yaml"
+
+    def list_folder(self, path):
+        """
+        Lists folder contents
+        """
+        if path.startswith(os.path.sep):
+            # absolute path
+            basedir = os.path.dirname(path)
+            contents = os.listdir(basedir)
+            # add back the parent
+            contents = [os.path.join(basedir, d) for d in contents]
+        else:
+            # relative path
+            contents = os.listdir(os.curdir)
+        return contents
 
     def zpcli_complete(self, text, state):
         """ """
@@ -59,6 +76,9 @@ class Zpcli:
             for c in self.C_VARIABLES:
                 if c.startswith(variable_name):
                     results.append(line[0] + " " + c)
+        elif line[0] == ":cd":
+            my_path = line[1]
+            results = [':cd ' + x for x in self.list_folder(my_path) if x.startswith(my_path.strip())]
         else:
             results = [c + ' ' for c in self.C_ZPCLI_COMMANDS if c.startswith(line[0].strip())]
 
@@ -70,6 +90,7 @@ class Zpcli:
         """ input actio """
         print_yellow(
             "\"Type \"q\" to quit; type \"/<string>\" to filter list; \":help\" to more information")
+        print("> " + os.getcwd())
         print_red("Action ", False)
         print_gray(" - Press ENTER to use last action ", False)
         print_red("\[" + self.C_LAST_ACTION + "]: ", False)
@@ -118,6 +139,11 @@ class Zpcli:
     def add_action_command(self, command):
         """ set column separator """
         self.C_COMMANDS.append(command)
+        self.C_ADDED_COMMANDS.append(command)
+
+    def remove_action_command(self, command):
+        """ set column separator """
+        self.C_COMMANDS.remove(command)
         self.C_ADDED_COMMANDS.append(command)
 
     def search_commnad_config(self, list_command):
@@ -264,40 +290,71 @@ class Zpcli:
 
     def print_list(self, list_command, param1, param2):
         """ print list """
-        print("================================================")
+        print("[deep_pink4]" + ("=" * 100) + "[/deep_pink4]")
         config_command = self.search_commnad_config(list_command)
+
 
         for i in self.C_SELECTED_COMMAND_ITEMS:
             line = self.C_SELECTED_COMMAND_ITEMS[i]
             if i in self.C_REPLACED_COMMAND_ITEMS:
-                star = "*"
+                star = ":brown_circle:"
             else:
                 star = " "
             if str(i) in self.C_LAST_ITEM:
-                print_green(star + str(i) + ": " + line)
+                # print_green(star + str(i) + ": " + line)
+                print(":+1:" + star + str(i) + ": " + line)
             else:
-                print_green(star + str(i) + ": ", False)
+                print("[green3] " + star + str(i) + "[/green3]) ", end="")
                 print(line)
 
     def print_commands(self, list_command):
         commands = self.search_commnad_config(list_command)["actions"]
         """ print defined commands """
-        print("================================================")
+        print("[deep_pink4]" + ("=" * 100) + "[/deep_pink4]")
 
-        for index, command in enumerate(commands):
-            if command in self.C_ADDED_COMMANDS:
-                star = "*"
-            else:
-                star = " "
+        p_command = []
+        index = 0
+        while index < len(commands):
+            command1 = commands[index]
             if str(index + 1) == self.C_LAST_ACTION:
-                print_red(star + str(index + 1) + ") " + command)
+                command1 = ":+1:" + commands[index]
+            if len(commands) > index + 1:
+                # if there are 2 another items
+                command2 = commands[index + 1]
+                if str(index + 2) == self.C_LAST_ACTION:
+                    command2 = ":+1:" + commands[index + 1]
+                if len(commands[index]) > 50 or ((index + 1) in commands and len(commands[index + 1]) > 50):
+                    # command is longer than 1 column - take just one to line
+                    cmd = {index: command1}
+                    index = index + 1
+                else:
+                    # two commands to line
+                    cmd = {index: command1, index + 1: command2}
+                    index = index + 2
+                p_command.append(cmd)
             else:
-                print_red(star + str(index + 1) + ") ", False)
-                print(command)
+                # last command
+                cmd = {index: command1}
+                p_command.append(cmd)
+                break
+
+        for command_line in p_command:
+            keys = list(command_line.keys())
+            # print(f"%-{longest_col}s" % ( command_line[keys[0]]) )
+            # print(f"%-{longest_col}s%-{longest_col}s" % ( command_line[keys[0]], command_line[keys[0]]) )
+            if len(command_line) > 1:
+                print(f"[orange_red1]%-2i[/orange_red1]) %-50s[orange_red1]%-2i[/orange_red1]) %-50s" % (
+                keys[0] + 1, command_line[keys[0]], keys[1] + 1, command_line[keys[1]]))
+            else:
+                print(f"[orange_red1]%-2i[/orange_red1]) %-50s" % (keys[0] + 1, command_line[keys[0]]))
+
+        print("")
+        print("[deep_pink4]" + ("=" * 100) + "[/deep_pink4]")
 
     def run_command(self, command_key, item_key):
         """ run command """
-        print_yellow("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
+        print("[deep_pink4]" + ("v" * 100) + "[/deep_pink4]")
+        print("[deep_pink4]" + ("=" * 100) + "[/deep_pink4]")
 
         command_num = int(command_key)
         run_cmd = str(self.C_COMMANDS[command_num - 1]).strip()
@@ -368,6 +425,7 @@ class Zpcli:
                                      stderr=subprocess.PIPE)
                 output = str(ssh.stdout.decode("utf-8"))
             else:
+                # output = os.system(run_cmd + ' | tee -a /tmp/zpcli-output')
                 output = os.system(run_cmd)
 
             print(output)
@@ -389,14 +447,16 @@ ZPCLI:
 
 ACTIONS:
 :help           this output
+4               run action "4)"
 :config         open yaml config in vim editor
+:cd             change current directory
+:pwd            show current directory
 :sep=,          change cols separator from default "\s+" to "," (e.g. for csv)
 :confirm        command needs to be confirmed before execution, you can also modify it
 :noconfirm      default - command executed without confirmation
 :sort 2         sort list by 2nd column (asc)
 :sort -2        sort listy by 2nd column (desc)
 :sort 0         disable sorting
-4               run action "4)"
 /mystr          search 'mystr' string in the output
 /               remove filter
 s/search/repl   'search' will be replaced by 'repl' in the output
@@ -408,6 +468,7 @@ s//             remove/reset replacement
                 $1 - will be replaced by value in 1st column of selected item(s)
                 $2 - will be replaced by value in 2nd column of selected item(s)
                 $var - will be replaced by value od var variable (see above)
+-cat $1 $2 $var action command will be reomved from action list
 :save-config    save current config - adds new commands added above permanently
 q               quit zpcli 
 

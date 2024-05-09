@@ -32,9 +32,9 @@ def print_blue(str_to_print, new_line=True):
 
 def print_gray(str_to_print, new_line=True):
     if new_line:
-        print(f"[gray]{str_to_print}[/gray]")
+        print(f"[grey62]{str_to_print}[/grey62]")
     else:
-        print(f"[gray]{str_to_print}[/gray]", end="")
+        print(f"[grey62]{str_to_print}[/grey62]", end="")
 
 def rlinput(prompt, prefill=''):
     readline.set_startup_hook(lambda: readline.insert_text(prefill))

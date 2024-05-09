@@ -4,21 +4,21 @@ from zpcli import Zpcli
 from zpoutput import print_green, print_red, print_yellow, print_gray, print_blue
 import sys
 import os
+from rich import print
 
 
 def print_list_items(zpcli):
-    arg_command, arg_actions, arg_param1, arg_param2 = get_params()
+    arg_command, arg_actions, arg_param1, arg_param2 = get_params(zpcli)
     zpcli.process_list_lines(arg_command, arg_param1, arg_param2)
     zpcli.print_list(arg_command, arg_param1, arg_param2)
-    #:w
-    # zpcli.print_list_rich()
 
-    print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+    print("[deep_pink4]" + ("^" * 100) + "[/deep_pink4]")
+
 
 def print_status_line(zpcli):
-    arg_command, arg_actions, arg_param1, arg_param2 = get_params()
-    print(f"ZPCLI: ", end="")
-    print_yellow(f"{arg_command} {arg_param1} {arg_param2}", False)
+    arg_command, arg_actions, arg_param1, arg_param2 = get_params(zpcli)
+    print(f"ZPCLI ", end="")
+    print_yellow(f">> [bold][yellow]{arg_command} {arg_param1} {arg_param2}[/yellow][/bold]", False)
     print(">> Filter: ", end="")
     print_yellow(f"{zpcli.C_SEARCH}", False)
     print(" [" + str(len(zpcli.C_SELECTED_COMMAND_ITEMS)) + " rows] Replace: ", end="")
@@ -37,7 +37,8 @@ def main():
     config = zpcli.read_conf()
     just_opened = True
 
-    arg_command, arg_actions, arg_param1, arg_param2 = get_params()
+    arg_command, arg_actions, arg_param1, arg_param2 = get_params(zpcli)
+    print(zpcli)
     zpcli.params = {
         "arg_command": arg_command,
         "arg_actions": arg_actions,
@@ -126,10 +127,20 @@ def main():
                 if not separator:
                     separator = zpcli.C_SEPARATOR_DEFAULT
                 zpcli.C_SEPARATOR = separator
+            elif action[1:].startswith("cd "):
+                cd_parts = action[1:].split(" ")
+                os.chdir(cd_parts[1])
+            elif action[1:] == "pwd":
+                print(os.getcwd())
+                input()
             continue
         elif action[0] == "+":
             """ add action command to runtime """
             zpcli.add_action_command(action[1:])
+            continue
+        elif action[0] == "-":
+            """ add action command to runtime """
+            zpcli.remove_action_command(action[1:])
             continue
         elif action[0] == "!":
             """ modify command befire run """
@@ -177,8 +188,11 @@ def print_list(mydict):
     print("\n".join("{} = {}".format(k, v) for k, v in sorted(mydict.items(), key=lambda t: str(t[0]))))
 
 
-def get_params():
-    arg_command = sys.argv[1]
+def get_params(zpcli):
+    if zpcli.C_LIST_COMMAND:
+        arg_command = zpcli.C_LIST_COMMAND
+    else:
+        arg_command = sys.argv[1]
     if len(sys.argv) > 2:
         arg_actions = sys.argv[2]
     else:
