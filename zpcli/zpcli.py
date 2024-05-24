@@ -30,6 +30,7 @@ class Zpcli:
     C_SEPARATOR = r"\s+"
     C_SEPARATOR_DEFAULT = r"\s+"
     C_CONFIRM = False
+    C_VARIABLE_CONFIRMED = False
     C_LAST_ACTION = "/"
     C_LAST_ITEM = []
     C_MODIFY_COMMAND = False
@@ -42,12 +43,15 @@ class Zpcli:
     CONFIG = {}
     config_file = ""
     variable_file = ""
+    history_file = ""
     params = {}
 
     def __init__(self):
         """ init """
         self.config_file = os.path.expanduser("~") + "/.zpcli.yaml"
         self.variable_file = os.path.expanduser("~") + "/.zpcli-vars.yaml"
+        readline.read_history_file(os.path.expanduser("~") + '/.bash_history')
+        self.history_file = os.path.expanduser("~") + '/.bash_history'
 
     def list_folder(self, path):
         """
@@ -80,7 +84,7 @@ class Zpcli:
             my_path = line[1]
             results = [':cd ' + x for x in self.list_folder(my_path) if x.startswith(my_path.strip())]
         else:
-            results = [c + ' ' for c in self.C_ZPCLI_COMMANDS if c.startswith(line[0].strip())]
+            results = [c for c in self.C_ZPCLI_COMMANDS if c.startswith(" ".join(line).strip())]
 
         logging.debug("text %s", text)
         logging.debug("state %s", state)
@@ -98,7 +102,15 @@ class Zpcli:
         readline.set_completer_delims('\t')
         readline.parse_and_bind("tab: complete")
 
+        with open(self.history_file, "r") as h_file:
+            history_lines = h_file.readlines()
+
+        for history_line in history_lines:
+            if history_line not in self.C_ZPCLI_COMMANDS:
+                self.C_ZPCLI_COMMANDS.append(str(history_line).strip())
+
         readline.set_completer(self.zpcli_complete)
+        readline.set_completer_delims('')
 
         action = input()
 
@@ -351,6 +363,10 @@ class Zpcli:
         print("")
         print("[deep_pink4]" + ("=" * 100) + "[/deep_pink4]")
 
+    def run_system(self, action):
+        os.system(action)
+        readline.write_history_file(os.path.expanduser("~") +'/.bash_history')
+
     def run_command(self, command_key, item_key):
         """ run command """
         print("[deep_pink4]" + ("v" * 100) + "[/deep_pink4]")
@@ -392,44 +408,60 @@ class Zpcli:
         for key in self.C_VARIABLES:
             # print(key)
             if run_cmd.find("$" + key) != -1:
-                print_red("realy use (y/n)?")
-                print(key + " = " + self.C_VARIABLES[key])
-                x = input()
-                if x != "y":
-                    return 0
+                if self.C_VARIABLE_CONFIRMED == False:
+                    print_red("realy use (y/n)?")
+                    print(key + " = " + self.C_VARIABLES[key])
+                    x = input()
+                    if x != "y":
+                        return 0
             run_cmd = run_cmd.replace("$" + key, str(self.C_VARIABLES[key]))
 
         run_cmd = run_cmd.replace("=>", "; ")
+        run_cmd_orig = run_cmd
 
-        if self.C_VARIABLES["command-wrapper"] and self.C_VARIABLES["cw-enabled"]:
-            run_cmd = self.C_VARIABLES["command-wrapper"].replace("<command>", run_cmd)
+        input_loop = True
+        while input_loop:
+            input_loop = False
+            if run_cmd_orig.find("$input") != -1:
+                print("Type $input")
+                my_input = input()
+                if (my_input):
+                    run_cmd = run_cmd_orig.replace("$input", my_input)
+                    input_loop = True
+                else:
+                    input_loop = False
+                    return can_continue
 
-        # print(self.C_VARIABLES["SUM"])
-        print_blue(run_cmd)
-        if self.C_MODIFY_COMMAND:
-            run_cmd = rlinput("> ", run_cmd)
+            if self.C_VARIABLES["command-wrapper"] and self.C_VARIABLES["cw-enabled"]:
+                run_cmd = self.C_VARIABLES["command-wrapper"].replace("<command>", run_cmd)
 
-        if self.C_CONFIRM:
-            print_red("Realy run: " + run_cmd + " ? y/n")
-            confirm = input()
-        else:
-            confirm = "y"
+            # print(self.C_VARIABLES["SUM"])
+            print_blue(run_cmd)
+            if self.C_MODIFY_COMMAND:
+                run_cmd = rlinput("> ", run_cmd)
 
-        if confirm == "y":
-            # process = subprocess.run(command_arr, cwd="/home")
-            if run_cmd.startswith("ssh ") and run_cmd.find('"') != -1:
-                ssh_args = run_cmd[4:].split('"')
-                ssh = subprocess.run(["ssh", ssh_args[0].strip(), ssh_args[1].strip()],
-                                     shell=False,
-                                     stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE)
-                output = str(ssh.stdout.decode("utf-8"))
+            if self.C_CONFIRM:
+                print_red("Realy run: " + run_cmd + " ? y/n")
+                confirm = input()
             else:
-                # output = os.system(run_cmd + ' | tee -a /tmp/zpcli-output')
-                output = os.system(run_cmd)
+                confirm = "y"
 
-            print(output)
-            return can_continue
+            if confirm == "y":
+                # process = subprocess.run(command_arr, cwd="/home")
+                if run_cmd.startswith("ssh ") and run_cmd.find('"') != -1:
+                    ssh_args = run_cmd[4:].split('"')
+                    ssh = subprocess.run(["ssh", ssh_args[0].strip(), ssh_args[1].strip()],
+                                         shell=False,
+                                         stdout=subprocess.PIPE,
+                                         stderr=subprocess.PIPE)
+                    output = str(ssh.stdout.decode("utf-8"))
+                else:
+                    # output = os.system(run_cmd + ' | tee -a /tmp/zpcli-output')
+                    output = os.system(run_cmd)
+
+                print(output)
+                if input_loop == False:
+                    return can_continue
 
     def action_save_config(self):
         conf_file = self.config_file

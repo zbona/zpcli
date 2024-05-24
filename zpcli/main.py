@@ -38,7 +38,8 @@ def main():
     just_opened = True
 
     arg_command, arg_actions, arg_param1, arg_param2 = get_params(zpcli)
-    print(zpcli)
+    if arg_command == "":
+        arg_command = "grep list-command " + zpcli.config_file
     zpcli.params = {
         "arg_command": arg_command,
         "arg_actions": arg_actions,
@@ -146,7 +147,7 @@ def main():
             """ modify command befire run """
             zpcli.C_MODIFY_COMMAND = True
             action_key = int(action[1:])
-        elif action[0] == "q":
+        elif action == "q":
             """ exit """
             sys.exit()
         else:
@@ -154,9 +155,11 @@ def main():
                 """ run normal action """
                 action_key = action
             else:
-                print("ERROR")
-                print(action)
+                zpcli.run_system(action)
+                #print("ERROR")
+                #print(action)
                 input()
+                continue
 
         items = zpcli.input_items()
         if items[0] == "q":
@@ -172,11 +175,14 @@ def main():
         # print(items)
         # zpcli.save_variable("SUM", 0)
 
+        zpcli.C_VARIABLE_CONFIRMED = False
         for item_key in items:
             try:
                 can_continue = zpcli.run_command(action_key, item_key)
                 if can_continue == False:
                     break
+                else:
+                    zpcli.C_VARIABLE_CONFIRMED = True
             except Exception as exc:
                 print(exc)
 
@@ -192,7 +198,10 @@ def get_params(zpcli):
     if zpcli.C_LIST_COMMAND:
         arg_command = zpcli.C_LIST_COMMAND
     else:
-        arg_command = sys.argv[1]
+        if len(sys.argv) > 1:
+            arg_command = sys.argv[1]
+        else:
+            arg_command = "grep list-command " + zpcli.config_file
     if len(sys.argv) > 2:
         arg_actions = sys.argv[2]
     else:
