@@ -365,7 +365,8 @@ class Zpcli:
 
     def run_system(self, action):
         os.system(action)
-        readline.write_history_file(os.path.expanduser("~") +'/.bash_history')
+        if len(action) > 2:
+            readline.write_history_file(os.path.expanduser("~") +'/.bash_history')
 
     def run_command(self, command_key, item_key):
         """ run command """
