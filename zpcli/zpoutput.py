@@ -29,6 +29,10 @@ def print_blue(str_to_print, new_line=True):
     else:
         print(f"[blue]{str_to_print}[/blue]", end="")
 
+def get_highlighted(str_to_print: str, str_to_highlight: str):
+    str_to_print = str_to_print.replace(str_to_highlight, '[yellow]' + str_to_highlight + '[/yellow]')
+    return  str_to_print
+
 
 def print_gray(str_to_print, new_line=True):
     if new_line:

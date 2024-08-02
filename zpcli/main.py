@@ -101,6 +101,8 @@ def main():
                 continue
             elif action[1:] == "uniq":
                 zpcli.action_uniq()
+            elif action[1:] == "prompt":
+                zpcli.generate_prompt()
             elif action[1:] == "save-config":
                 zpcli.action_save_config()
             elif action[1:] == "config":
@@ -158,6 +160,7 @@ def main():
                 zpcli.run_system(action)
                 #print("ERROR")
                 #print(action)
+                print("... press Enter to continue ...")
                 input()
                 continue
 

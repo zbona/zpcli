@@ -4,7 +4,7 @@ import re
 import sys
 
 import yaml
-from zpoutput import print_green, print_red, print_yellow, print_gray, print_blue, rlinput
+from zpoutput import print_green, print_red, print_yellow, print_gray, print_blue, get_highlighted, rlinput
 from rich.table import Table
 from rich.console import Console
 import readline
@@ -68,6 +68,39 @@ class Zpcli:
             contents = os.listdir(os.curdir)
         return contents
 
+    def generate_prompt(self):
+        print("Person")
+        gpt_persona = input()
+        print("Context")
+        gpt_context = input()
+        print("Task")
+        gpt_task = input()
+        print("Example")
+        gpt_exemplar = input()
+        print("Format")
+        gpt_format = input()
+        print("Tone")
+        gpt_tone = input()
+
+        context = gpt_context
+        if gpt_persona:
+            persona = "Jednej jako " + gpt_persona
+        else:
+            persona = ""
+        task = gpt_task
+        exemplar = gpt_exemplar
+        if gpt_persona:
+            formating = "Jako vystup prosim pouzij " + gpt_format
+        else:
+            formating = ""
+        if gpt_tone:
+            tone = "Text formuluj formou " + gpt_tone
+        else:
+            tone = ""
+
+        print(persona, context, task, exemplar, formating, tone)
+
+
     def zpcli_complete(self, text, state):
         """ """
         line = readline.get_line_buffer().split()
@@ -91,7 +124,7 @@ class Zpcli:
         return results[state]
 
     def input_action(self):
-        """ input actio """
+        """ input action """
         print_yellow(
             "\"Type \"q\" to quit; type \"/<string>\" to filter list; \":help\" to more information")
         print("> " + os.getcwd())
@@ -262,7 +295,15 @@ class Zpcli:
                                   replace_list[2].replace("[escaped-slash]", "/"), line)
                     self.C_REPLACED_COMMAND_ITEMS.append(i)
             if self.C_SEARCH != "":
-                match_search = re.match(".*" + self.C_SEARCH + ".*", line)
+                if self.C_SEARCH[0] == "^":
+                    not_matched_words = self.C_SEARCH[1:].split("|")
+                    match_search = True
+                    for word in not_matched_words:
+                        if line.find(word) != -1:
+                            match_search = False
+                            break
+                else:
+                    match_search = re.match(".*" + self.C_SEARCH + ".*", line)
                 if match_search:
                     current_lines[i] = line
             else:
@@ -366,7 +407,7 @@ class Zpcli:
     def run_system(self, action):
         os.system(action)
         if len(action) > 2:
-            readline.write_history_file(os.path.expanduser("~") +'/.bash_history')
+            readline.write_history_file(self.history_file)
 
     def run_command(self, command_key, item_key):
         """ run command """
@@ -423,8 +464,9 @@ class Zpcli:
         input_loop = True
         while input_loop:
             input_loop = False
+            print("Run command: " + get_highlighted(run_cmd, '$input'))
             if run_cmd_orig.find("$input") != -1:
-                print("Type $input")
+                print(get_highlighted("Specify $input", "$input"))
                 my_input = input()
                 if (my_input):
                     run_cmd = run_cmd_orig.replace("$input", my_input)
@@ -437,7 +479,6 @@ class Zpcli:
                 run_cmd = self.C_VARIABLES["command-wrapper"].replace("<command>", run_cmd)
 
             # print(self.C_VARIABLES["SUM"])
-            print_blue(run_cmd)
             if self.C_MODIFY_COMMAND:
                 run_cmd = rlinput("> ", run_cmd)
 
@@ -459,6 +500,10 @@ class Zpcli:
                 else:
                     # output = os.system(run_cmd + ' | tee -a /tmp/zpcli-output')
                     output = os.system(run_cmd)
+
+                with open(self.history_file, "a") as f:
+                    f.write("\n" + run_cmd)
+                readline.add_history(run_cmd)
 
                 print(output)
                 if input_loop == False:
@@ -511,6 +556,7 @@ ITEMS:
 *               run action for all displayed / filtered items
 
 !ls -la         change list command to any other
+git status      run any bash command, you can also use bash history search by Ctrl+R
 
 ... press Enter to continue ...
 """
