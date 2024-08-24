@@ -288,12 +288,14 @@ class Zpcli:
             if not line:
                 continue
             if self.C_REPLACE:
-                tmpreplace = self.C_REPLACE.replace("\/", "[escaped-slash]")
-                replace_list = tmpreplace.split("/")
-                if re.match(".*" + replace_list[1].replace("[escaped-slash]", "/") + ".*", line) is not None:
-                    line = re.sub(replace_list[1].replace("[escaped-slash]", "/"),
-                                  replace_list[2].replace("[escaped-slash]", "/"), line)
-                    self.C_REPLACED_COMMAND_ITEMS.append(i)
+                replace_strings = self.C_REPLACE.split("&&")
+                for replace_string in replace_strings:
+                    tmpreplace = replace_string.replace("\/", "[escaped-slash]")
+                    replace_list = tmpreplace.split("/")
+                    if re.match(".*" + replace_list[1].replace("[escaped-slash]", "/") + ".*", line) is not None:
+                        line = re.sub(replace_list[1].replace("[escaped-slash]", "/"),
+                                      replace_list[2].replace("[escaped-slash]", "/"), line)
+                        self.C_REPLACED_COMMAND_ITEMS.append(i)
             if self.C_SEARCH != "":
                 if self.C_SEARCH[0] == "^":
                     not_matched_words = self.C_SEARCH[1:].split("|")

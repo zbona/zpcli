@@ -108,6 +108,9 @@ def main():
             elif action[1:] == "config":
                 os.system("vim " + zpcli.config_file)
                 zpcli.read_conf()
+            elif action[1:] == "var":
+                os.system("vim " + zpcli.variable_file)
+                zpcli.load_variables()
             elif action[1:].startswith("get"):
                 print_list(zpcli.C_VARIABLES)
                 input()
