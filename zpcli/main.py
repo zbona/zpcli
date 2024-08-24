@@ -88,9 +88,9 @@ def main():
         elif action.startswith("!"):
             zpcli.C_LIST_COMMAND = action[1:]
             continue
-        elif action.startswith("s/"):
+        elif action.startswith(":s/"):
             """ sed - substitute """
-            zpcli.C_REPLACE = action
+            zpcli.C_REPLACE = action[1:]
             continue
         elif action[0] == ":":
             """ command - separator, save config, record, history, help, edit command """

@@ -38,7 +38,7 @@ class Zpcli:
     C_VARIABLES_LOCAL = {}
     C_SORT = ""
     C_ZPCLI_COMMANDS = [":help", ":set", ":set-local", ":get", ":sort", ":sep=", ":confirm", ":save-config", "q",
-                        ":cd", ":pwd",
+                        ":cd", ":pwd", ":var"
                         ":noconfirm", ":config", "/", "s//", "+cat $1"]
     CONFIG = {}
     config_file = ""
@@ -529,6 +529,7 @@ ACTIONS:
 :help           this output
 4               run action "4)"
 :config         open yaml config in vim editor
+:var            open yaml file with variables in vim editor
 :cd             change current directory
 :pwd            show current directory
 :sep=,          change cols separator from default "\s+" to "," (e.g. for csv)
@@ -537,10 +538,10 @@ ACTIONS:
 :sort 2         sort list by 2nd column (asc)
 :sort -2        sort listy by 2nd column (desc)
 :sort 0         disable sorting
-/mystr          search 'mystr' string in the output
+/mystr          search 'mystr' string in the output, by ^ you can filter lines that doesn't containen string ( /^not-this )
 /               remove filter
-s/search/repl   'search' will be replaced by 'repl' in the output
-s//             remove/reset replacement
+:s/search/repl   'search' will be replaced by 'repl' in the output, You can multiple replacement by && (:s/s1/r1/ && s/s2/r2/)
+:s//             remove/reset replacement
 :set var=value  set global variable called "var" with "value" as value. You can use it in your commands as $var then
 :set-local v=x  set LOCAL variable called "v" with "x" as value. This value is used just for current zpcli instance
 :get            get all set variables
