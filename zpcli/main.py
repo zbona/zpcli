@@ -5,6 +5,11 @@ from zpoutput import print_green, print_red, print_yellow, print_gray, print_blu
 import sys
 import os
 from rich import print
+from rich import box
+from rich.style import Style
+from rich.color import Color
+from rich.color import ColorType
+from rich.panel import Panel
 
 
 def print_list_items(zpcli):
@@ -12,23 +17,23 @@ def print_list_items(zpcli):
     zpcli.process_list_lines(arg_command, arg_param1, arg_param2)
     zpcli.print_list(arg_command, arg_param1, arg_param2)
 
-    print("[deep_pink4]" + ("^" * 100) + "[/deep_pink4]")
-
 
 def print_status_line(zpcli):
     arg_command, arg_actions, arg_param1, arg_param2 = get_params(zpcli)
-    print(f"ZPCLI ", end="")
-    print_yellow(f">> [bold][yellow]{arg_command} {arg_param1} {arg_param2}[/yellow][/bold]", False)
-    print(">> Filter: ", end="")
-    print_yellow(f"{zpcli.C_SEARCH}", False)
-    print(" [" + str(len(zpcli.C_SELECTED_COMMAND_ITEMS)) + " rows] Replace: ", end="")
-    print_yellow(zpcli.C_REPLACE, False)
-    print(" Separator: " + zpcli.C_SEPARATOR, end="")
-    print(" Sort: " + zpcli.C_SORT, end="")
+    # panel_content = f"ZPCLI: "
+    panel_content = ""
+    panel_content = panel_content + f">> [bold][yellow]{arg_command} {arg_param1} {arg_param2}[/yellow][/bold]"
+    panel_content = panel_content + f">> Filter: "
+    panel_content = panel_content + f"{zpcli.C_SEARCH}"
+    panel_content = panel_content + f" [" + str(len(zpcli.C_SELECTED_COMMAND_ITEMS)) + " rows] Replace: [yellow]" + zpcli.C_REPLACE + "[/yellow]"
+    panel_content = panel_content + f" Separator: " + zpcli.C_SEPARATOR
+    panel_content = panel_content + f" Sort: " + zpcli.C_SORT
     if zpcli.C_MODIFY_COMMAND:
-        print_green(" |CONFIRM| ")
+        panel_content = panel_content + (" [green]|CONFIRM|[/green] ")
     else:
-        print_red(" |NOCONFIRM| ")
+        panel_content = panel_content + (" [red]|CONFIRM|[/red] ")
+    style = "border green"
+    print(Panel(panel_content, title="zpcli", title_align="left", box=box.HORIZONTALS, border_style="deep_pink4"))
 
 
 def main():
@@ -51,21 +56,7 @@ def main():
         if zpcli.C_LIST_COMMAND:
             arg_command = zpcli.C_LIST_COMMAND
         if zpcli.search_commnad_config(arg_command):
-            command_config = zpcli.search_commnad_config(arg_command)
-            zpcli.C_COMMANDS = command_config["actions"]
-            if just_opened:
-                if "separator" in command_config.keys():
-                    zpcli.C_SEPARATOR = command_config["separator"]
-                if "search" in command_config.keys():
-                    zpcli.C_SEARCH = command_config["search"]
-                if "replace" in command_config.keys():
-                    zpcli.C_REPLACE = command_config["replace"]
-                if "modify" in command_config.keys():
-                    if command_config["modify"] == "1":
-                        zpcli.C_MODIFY_COMMAND = True
-                    else:
-                        zpcli.C_MODIFY_COMMAND = False
-
+            init_config(zpcli, arg_command, just_opened)
         just_opened = False
 
         zpcli.load_variables()
@@ -82,9 +73,6 @@ def main():
             """ search  """
             zpcli.C_SEARCH = action[1:]
             continue
-        elif action == "bash":
-            os.system("bash")
-            continue
         elif action.startswith("!"):
             zpcli.C_LIST_COMMAND = action[1:]
             continue
@@ -93,52 +81,7 @@ def main():
             zpcli.C_REPLACE = action[1:]
             continue
         elif action[0] == ":":
-            """ command - separator, save config, record, history, help, edit command """
-            if action[1:] == "help":
-                zpcli.action_help()
-            elif action[1:].startswith("sort"):
-                zpcli.C_SORT = action.replace(":sort ", "")
-                continue
-            elif action[1:] == "uniq":
-                zpcli.action_uniq()
-            elif action[1:] == "prompt":
-                zpcli.generate_prompt()
-            elif action[1:] == "save-config":
-                zpcli.action_save_config()
-            elif action[1:] == "config":
-                os.system("vim " + zpcli.config_file)
-                zpcli.read_conf()
-            elif action[1:] == "var":
-                os.system("vim " + zpcli.variable_file)
-                zpcli.load_variables()
-            elif action[1:].startswith("get"):
-                print_list(zpcli.C_VARIABLES)
-                input()
-            elif action[1:].startswith("set-local"):
-                variable_tmp = action.replace(":set-local ", "").strip()
-                variable = variable_tmp.split("=")
-                zpcli.C_VARIABLES_LOCAL[variable[0]] = variable[1]
-            elif action[1:].startswith("set "):
-                variable_tmp = action.replace(":set ", "").strip()
-                variable = variable_tmp.split("=", 1)
-                zpcli.save_variable(variable[0], variable[1])
-                print(zpcli.C_VARIABLES)
-                input()
-            elif action[1:] == "confirm":
-                zpcli.C_MODIFY_COMMAND = True
-            elif action[1:] == "noconfirm":
-                zpcli.C_MODIFY_COMMAND = False
-            elif action[1:].startswith("sep"):
-                separator = action[1:].split("=", maxsplit=1)[1]
-                if not separator:
-                    separator = zpcli.C_SEPARATOR_DEFAULT
-                zpcli.C_SEPARATOR = separator
-            elif action[1:].startswith("cd "):
-                cd_parts = action[1:].split(" ")
-                os.chdir(cd_parts[1])
-            elif action[1:] == "pwd":
-                print(os.getcwd())
-                input()
+            zpcli_commands(zpcli, action)
             continue
         elif action[0] == "+":
             """ add action command to runtime """
@@ -147,6 +90,13 @@ def main():
         elif action[0] == "-":
             """ add action command to runtime """
             zpcli.remove_action_command(action[1:])
+            continue
+        elif action[0] == "?":
+            """ add action command to runtime """
+            commands = zpcli.search_commnad_config(arg_command)["actions"]
+            print(commands[int(action[1:]) - 1])
+            print( "... Press Enter to continue ...")
+            AAA = input()
             continue
         elif action[0] == "!":
             """ modify command befire run """
@@ -161,8 +111,6 @@ def main():
                 action_key = action
             else:
                 zpcli.run_system(action)
-                #print("ERROR")
-                #print(action)
                 print("... press Enter to continue ...")
                 input()
                 continue
@@ -177,9 +125,6 @@ def main():
             for i in zpcli.C_SELECTED_COMMAND_ITEMS.keys():
                 items.append(i)
                 zpcli.C_LAST_ITEM.append(str(i))
-        # print("items")
-        # print(items)
-        # zpcli.save_variable("SUM", 0)
 
         zpcli.C_VARIABLE_CONFIRMED = False
         for item_key in items:
@@ -199,6 +144,68 @@ def main():
 def print_list(mydict):
     print("\n".join("{} = {}".format(k, v) for k, v in sorted(mydict.items(), key=lambda t: str(t[0]))))
 
+
+def zpcli_commands(zpcli, action):
+    """ command - separator, save config, record, history, help, edit command """
+    if action[1:] == "help":
+        zpcli.action_help()
+    elif action[1:].startswith("sort"):
+        zpcli.C_SORT = action.replace(":sort ", "")
+    elif action[1:] == "uniq":
+        zpcli.action_uniq()
+    elif action[1:] == "save-config":
+        zpcli.action_save_config()
+    elif action[1:] == "config":
+        os.system("vim " + zpcli.config_file)
+        zpcli.read_conf()
+    elif action[1:] == "var":
+        os.system("vim " + zpcli.variable_file)
+        zpcli.load_variables()
+    elif action[1:].startswith("get"):
+        print_list(zpcli.C_VARIABLES)
+        input()
+    elif action[1:].startswith("set-local"):
+        variable_tmp = action.replace(":set-local ", "").strip()
+        variable = variable_tmp.split("=")
+        zpcli.C_VARIABLES_LOCAL[variable[0]] = variable[1]
+    elif action[1:].startswith("set "):
+        variable_tmp = action.replace(":set ", "").strip()
+        variable = variable_tmp.split("=", 1)
+        zpcli.save_variable(variable[0], variable[1])
+        print(zpcli.C_VARIABLES)
+        input()
+    elif action[1:] == "confirm":
+        zpcli.C_MODIFY_COMMAND = True
+    elif action[1:] == "noconfirm":
+        zpcli.C_MODIFY_COMMAND = False
+    elif action[1:].startswith("sep"):
+        separator = action[1:].split("=", maxsplit=1)[1]
+        if not separator:
+            separator = zpcli.C_SEPARATOR_DEFAULT
+        zpcli.C_SEPARATOR = separator
+    elif action[1:].startswith("cd "):
+        cd_parts = action[1:].split(" ")
+        os.chdir(cd_parts[1])
+    elif action[1:] == "pwd":
+        print(os.getcwd())
+        input()
+
+
+def init_config(zpcli, arg_command, just_opened):
+    command_config = zpcli.search_commnad_config(arg_command)
+    zpcli.C_COMMANDS = command_config["actions"]
+    if just_opened:
+        if "separator" in command_config.keys():
+            zpcli.C_SEPARATOR = command_config["separator"]
+        if "search" in command_config.keys():
+            zpcli.C_SEARCH = command_config["search"]
+        if "replace" in command_config.keys():
+            zpcli.C_REPLACE = command_config["replace"]
+        if "modify" in command_config.keys():
+            if command_config["modify"] == "1":
+                zpcli.C_MODIFY_COMMAND = True
+            else:
+                zpcli.C_MODIFY_COMMAND = False
 
 def get_params(zpcli):
     if zpcli.C_LIST_COMMAND:

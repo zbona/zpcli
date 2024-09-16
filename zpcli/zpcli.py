@@ -7,6 +7,9 @@ import yaml
 from zpoutput import print_green, print_red, print_yellow, print_gray, print_blue, get_highlighted, rlinput
 from rich.table import Table
 from rich.console import Console
+from rich.columns import Columns
+from rich.panel import Panel
+from rich import box
 import readline
 
 import logging
@@ -68,38 +71,6 @@ class Zpcli:
             contents = os.listdir(os.curdir)
         return contents
 
-    def generate_prompt(self):
-        print("Person")
-        gpt_persona = input()
-        print("Context")
-        gpt_context = input()
-        print("Task")
-        gpt_task = input()
-        print("Example")
-        gpt_exemplar = input()
-        print("Format")
-        gpt_format = input()
-        print("Tone")
-        gpt_tone = input()
-
-        context = gpt_context
-        if gpt_persona:
-            persona = "Jednej jako " + gpt_persona
-        else:
-            persona = ""
-        task = gpt_task
-        exemplar = gpt_exemplar
-        if gpt_persona:
-            formating = "Jako vystup prosim pouzij " + gpt_format
-        else:
-            formating = ""
-        if gpt_tone:
-            tone = "Text formuluj formou " + gpt_tone
-        else:
-            tone = ""
-
-        print(persona, context, task, exemplar, formating, tone)
-
 
     def zpcli_complete(self, text, state):
         """ """
@@ -122,6 +93,7 @@ class Zpcli:
         logging.debug("text %s", text)
         logging.debug("state %s", state)
         return results[state]
+
 
     def input_action(self):
         """ input action """
@@ -250,7 +222,13 @@ class Zpcli:
 
     def get_list_command_output(self, list_command, param1, param2):
 
+        if list_command.find("$list-param1") != -1:
+            list_command = list_command.replace("$list-param1", self.C_VARIABLES["list-param1"])
+        if list_command.find("$list-param2") != -1:
+            list_command = list_command.replace("$list-param2", self.C_VARIABLES["list-param2"])
+
         if list_command.startswith("ssh "):
+
             ssh_args = list_command[4:].split('"')
             ssh = subprocess.run(["ssh", ssh_args[0].strip(), ssh_args[1].strip()],
                                  shell=False,
@@ -324,28 +302,10 @@ class Zpcli:
         with open(self.variable_file, "w") as var_file:
             var_file.write(yaml.dump(self.C_VARIABLES))
 
-    def print_list_rich(self):
-        console = Console()
-        table = Table(show_header=True, header_style="bold magenta")
-        for i in range(len(self.C_SELECTED_COMMAND_ITEMS[1])):
-            table.add_column(str(i))
-
-        print(self.C_SELECTED_COMMAND_ITEMS[1])
-        cols = re.split(rf"{self.C_SEPARATOR}", self.C_SELECTED_COMMAND_ITEMS[2])
-        print(cols)
-        table.add_row(cols)
-
-        console.print(table)
-        sys.exit()
-        for row in self.C_SELECTED_COMMAND_ITEMS:
-            cols = re.split(rf"{self.C_SEPARATOR}", row)
-            table.add_row(**cols)
-
-        console.print(table)
 
     def print_list(self, list_command, param1, param2):
         """ print list """
-        print("[deep_pink4]" + ("=" * 100) + "[/deep_pink4]")
+        # print("[deep_pink4]" + ("=" * 100) + "[/deep_pink4]")
         config_command = self.search_commnad_config(list_command)
 
 
@@ -365,7 +325,7 @@ class Zpcli:
     def print_commands(self, list_command):
         commands = self.search_commnad_config(list_command)["actions"]
         """ print defined commands """
-        print("[deep_pink4]" + ("=" * 100) + "[/deep_pink4]")
+        # print("[deep_pink4]" + ("=" * 100) + "[/deep_pink4]")
 
         p_command = []
         index = 0
@@ -393,18 +353,46 @@ class Zpcli:
                 p_command.append(cmd)
                 break
 
-        for command_line in p_command:
-            keys = list(command_line.keys())
+        # for command_line in p_command:
+            # keys = list(command_line.keys())
             # print(f"%-{longest_col}s" % ( command_line[keys[0]]) )
             # print(f"%-{longest_col}s%-{longest_col}s" % ( command_line[keys[0]], command_line[keys[0]]) )
-            if len(command_line) > 1:
-                print(f"[orange_red1]%-2i[/orange_red1]) %-50s[orange_red1]%-2i[/orange_red1]) %-50s" % (
-                keys[0] + 1, command_line[keys[0]], keys[1] + 1, command_line[keys[1]]))
-            else:
-                print(f"[orange_red1]%-2i[/orange_red1]) %-50s" % (keys[0] + 1, command_line[keys[0]]))
+            # if len(command_line) > 1:
+                # print(f"[orange_red1]%-2i[/orange_red1]) %-50s[orange_red1]%-2i[/orange_red1]) %-50s" % (
+                # keys[0] + 1, command_line[keys[0]].split("\n")[0], keys[1] + 1, command_line[keys[1]]))
+            # else:
+                # print(f"[orange_red1]%-2i[/orange_red1]) %-50s" % (keys[0] + 1, command_line[keys[0]].split("\n")[0]))
 
-        print("")
-        print("[deep_pink4]" + ("=" * 100) + "[/deep_pink4]")
+        # print(commands)
+        # print(commands[0:5])
+        # print(commands[5:10])
+        # table = columnar([commands[0:5], commands[5:10]], ["A", "B"], no_borders = True)
+        # print(table)
+        console = Console()
+
+        def cmd_detail(p_command):
+            cmd_num = p_command[0]
+            lines = p_command.split("\n")
+            if len(lines) > 1:
+                cmd = lines[0]
+            else:
+                cmd = p_command
+            # return f"[orange_red1]{cmd_num})[/orange_red1] {cmd}"
+            if len(cmd) > 100:
+                # cmd = cmd[0:97] + "..."
+                cmd = cmd[0:100] + "\n" + cmd[100:]
+            return cmd + " "
+        
+        # commands_columns = [commands[0:5], commands[5:10]]
+        commands_cols = [] # [Panel(xxx(p_cmd), expand = True) for p_cmd in commands]
+        for key, val in enumerate(commands):
+            title = f"[orange_red1]" + str(key + 1) + ")[/orange_red1] " + val
+            # commands_cols.append( Panel(cmd_detail( title ), expand=True, padding=[-1, -1], box=box.MINIMAL))
+            commands_cols.append( cmd_detail( title ))
+        print(Panel(Columns(commands_cols, expand=True, padding = [0,0]), title="commands", title_align="left", border_style="orange_red1"))
+
+        # print("")
+        # print("[deep_pink4]" + ("=" * 100) + "[/deep_pink4]")
 
     def run_system(self, action):
         os.system(action)
@@ -424,33 +412,16 @@ class Zpcli:
         run_cmd = run_cmd.replace("$param1", arg_param1)
         run_cmd = run_cmd.replace("$param2", arg_param2)
 
-        # selected_items_array = {}
-        # print(self.C_SELECTED_COMMAND_ITEMS)
-        # for si in self.C_SELECTED_COMMAND_ITEMS:
-        #     print('xxx')
-        #     for ii in range(1, 20):
-        #         print('yyy')
-        #         print(si)
-        #         print(ii)
-        #         selected_items_array[ii][si] = self.get_selected_items_col(si, ii - 1)
-        #         print(selected_items_array)
-
         can_continue = True
-        # print('aaa')
-        # print(selected_items_array)
+
         for i in range(1, 20):
             selected_item = self.get_selected_items_col(item_key, i - 1)
             if selected_item != "" and selected_item is not None:
                 run_cmd = run_cmd.replace("$" + str(i), selected_item)
-                # all chosen rows as command params
-                # if run_cmd.find("$$" + str(i)) != -1:
-                #     run_cmd = run_cmd.replace(" $$" + str(i), " ".join(selected_items_array[i]))
-                #     can_continue = False
             else:
                 run_cmd = run_cmd.replace(" $" + str(i), "")
 
         for key in self.C_VARIABLES:
-            # print(key)
             if run_cmd.find("$" + key) != -1:
                 if self.C_VARIABLE_CONFIRMED == False:
                     print_red("realy use (y/n)?")
@@ -528,6 +499,7 @@ ZPCLI:
 ACTIONS:
 :help           this output
 4               run action "4)"
+?4              show full command "4)" (without running)
 :config         open yaml config in vim editor
 :var            open yaml file with variables in vim editor
 :cd             change current directory

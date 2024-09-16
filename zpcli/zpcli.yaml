@@ -44,9 +44,6 @@ commands:
   - tail -f $1
   list-command: ls
 - actions:
-  - zpcli "$1 $2 $3"
-  list-command: cat /home/zbona/bin/docker-commands
-- actions:
   - docker stop $1
   - docker rm $1
   - docker restart $1
@@ -54,8 +51,7 @@ commands:
   - docker exec -it $1 bash
   - docker exec -it $1 sh
   - docker container prune
-  - docker exec -it $1 bash -c 'tail /var/log/*.log /var/log/*/*.log /var/invia/*/var/*.log
-    /var/invia/*/var/*/*.log'
+  - docker exec -it $1 bash -c 'tail /var/log/*.log /var/log/*/*.log 
   - docker stop $1 $2
   - docker stop $1; docker rm $1; docker rmi $2
   list-command: docker ps -a
@@ -74,9 +70,6 @@ commands:
   - tail $1
   - vim $1
   list-command: find .
-- actions:
-  - curl $4
-  list-command: cat ./invia-ddd/logs/ws-booking/cache/dev/profiler/index.csv
 - actions:
   - kubectl describe servicemonitor $2 --namespace=$1
   list-command: kubectl get servicemonitor -A
