@@ -8,9 +8,11 @@ from zpoutput import print_green, print_red, print_yellow, print_gray, print_blu
 from rich.table import Table
 from rich.console import Console
 from rich.columns import Columns
+from rich.theme import Theme
 from rich.panel import Panel
 from rich import box
-import readline
+from rich.markup import escape
+import gnureadline as readline
 
 import logging
 from rich import print
@@ -20,6 +22,11 @@ logging.basicConfig(filename=LOG_FILENAME,
                     level=logging.DEBUG,
                     )
 
+zpcli_highlight = Theme({
+    "zpcli_er": "black on orange_red1",
+    "zpcli_wa": "black on yellow1",
+    "zpcli_ok": "black on green3",
+})
 
 class Zpcli:
     C_LIST_COMMAND = ""
@@ -28,6 +35,7 @@ class Zpcli:
     C_REPLACED_COMMAND_ITEMS = []
     C_COMMANDS = []
     C_ADDED_COMMANDS = []
+    C_ACTION_SEARCH = ""
     C_SEARCH = ""
     C_REPLACE = ""
     C_SEPARATOR = r"\s+"
@@ -37,12 +45,13 @@ class Zpcli:
     C_LAST_ACTION = "/"
     C_LAST_ITEM = []
     C_MODIFY_COMMAND = False
+    C_TMUX_SPLIT = False
     C_VARIABLES = {}
     C_VARIABLES_LOCAL = {}
     C_SORT = ""
     C_ZPCLI_COMMANDS = [":help", ":set", ":set-local", ":get", ":sort", ":sep=", ":confirm", ":save-config", "q",
                         ":cd", ":pwd", ":var"
-                        ":noconfirm", ":config", "/", "s//", "+cat $1"]
+                        ":noconfirm", ":config", "/", ":s//", "+cat $1"]
     CONFIG = {}
     config_file = ""
     variable_file = ""
@@ -98,7 +107,7 @@ class Zpcli:
     def input_action(self):
         """ input action """
         print_yellow(
-            "\"Type \"q\" to quit; type \"/<string>\" to filter list; \":help\" to more information")
+            "\"Type \"q\" to quit; type \"/<string>\" to filter list; \"//string\" to filter command; \":help\" to more information")
         print("> " + os.getcwd())
         print_red("Action ", False)
         print_gray(" - Press ENTER to use last action ", False)
@@ -152,6 +161,7 @@ class Zpcli:
         item = item.strip()
         print(item)
         return item.split(" ")
+
 
     def add_action_command(self, command):
         """ set column separator """
@@ -305,107 +315,111 @@ class Zpcli:
 
     def print_list(self, list_command, param1, param2):
         """ print list """
-        # print("[deep_pink4]" + ("=" * 100) + "[/deep_pink4]")
         config_command = self.search_commnad_config(list_command)
 
+        items_list = []
 
         for i in self.C_SELECTED_COMMAND_ITEMS:
             line = self.C_SELECTED_COMMAND_ITEMS[i]
             if i in self.C_REPLACED_COMMAND_ITEMS:
                 star = ":brown_circle:"
             else:
-                star = " "
+                star = ""
             if str(i) in self.C_LAST_ITEM:
-                # print_green(star + str(i) + ": " + line)
-                print(":+1:" + star + str(i) + ": " + line)
+                items_list.append("[orange_red1]" + star + str(i) + "[/orange_red1]" + ": " + line)
             else:
-                print("[green3] " + star + str(i) + "[/green3]) ", end="")
-                print(line)
+                items_list.append("[green3]" + star + str(i) + "[/green3] " + line)
+        title = "(ZPCLI)"
+        subtitle = list_command + " --- /" + self.C_SEARCH
+        print(Panel("\n".join(items_list), title=f"{title} --- {subtitle}", title_align="left", border_style="deep_pink4"))
 
     def print_commands(self, list_command):
         commands = self.search_commnad_config(list_command)["actions"]
         """ print defined commands """
-        # print("[deep_pink4]" + ("=" * 100) + "[/deep_pink4]")
 
-        p_command = []
-        index = 0
-        while index < len(commands):
-            command1 = commands[index]
-            if str(index + 1) == self.C_LAST_ACTION:
-                command1 = ":+1:" + commands[index]
-            if len(commands) > index + 1:
-                # if there are 2 another items
-                command2 = commands[index + 1]
-                if str(index + 2) == self.C_LAST_ACTION:
-                    command2 = ":+1:" + commands[index + 1]
-                if len(commands[index]) > 50 or ((index + 1) in commands and len(commands[index + 1]) > 50):
-                    # command is longer than 1 column - take just one to line
-                    cmd = {index: command1}
-                    index = index + 1
-                else:
-                    # two commands to line
-                    cmd = {index: command1, index + 1: command2}
-                    index = index + 2
-                p_command.append(cmd)
-            else:
-                # last command
-                cmd = {index: command1}
-                p_command.append(cmd)
-                break
-
-        # for command_line in p_command:
-            # keys = list(command_line.keys())
-            # print(f"%-{longest_col}s" % ( command_line[keys[0]]) )
-            # print(f"%-{longest_col}s%-{longest_col}s" % ( command_line[keys[0]], command_line[keys[0]]) )
-            # if len(command_line) > 1:
-                # print(f"[orange_red1]%-2i[/orange_red1]) %-50s[orange_red1]%-2i[/orange_red1]) %-50s" % (
-                # keys[0] + 1, command_line[keys[0]].split("\n")[0], keys[1] + 1, command_line[keys[1]]))
-            # else:
-                # print(f"[orange_red1]%-2i[/orange_red1]) %-50s" % (keys[0] + 1, command_line[keys[0]].split("\n")[0]))
-
-        # print(commands)
-        # print(commands[0:5])
-        # print(commands[5:10])
-        # table = columnar([commands[0:5], commands[5:10]], ["A", "B"], no_borders = True)
-        # print(table)
         console = Console()
 
-        def cmd_detail(p_command):
-            cmd_num = p_command[0]
-            lines = p_command.split("\n")
-            if len(lines) > 1:
+        def cmd_detail(command, command_key):
+            lines = command.splitlines()
+            cmd = command
+
+            color = "orange_red1"
+            if cmd.startswith("*"):
+                color = "deep_pink4"
+            # if command.startswith("#"):
+            if self.C_ACTION_SEARCH == "" and len(lines) > 1:
                 cmd = lines[0]
-            else:
-                cmd = p_command
-            # return f"[orange_red1]{cmd_num})[/orange_red1] {cmd}"
-            if len(cmd) > 100:
-                # cmd = cmd[0:97] + "..."
-                cmd = cmd[0:100] + "\n" + cmd[100:]
-            return cmd + " "
+            elif self.C_ACTION_SEARCH == "" and len(cmd) > 50:
+                # cmd = cmd[0:50] + "\n" + cmd[50:]
+                cmd = cmd[0:50] + "..."
+            return f"[{color}]" + str(command_key) + f")[/{color}] " + cmd + " "
         
-        # commands_columns = [commands[0:5], commands[5:10]]
         commands_cols = [] # [Panel(xxx(p_cmd), expand = True) for p_cmd in commands]
         for key, val in enumerate(commands):
-            title = f"[orange_red1]" + str(key + 1) + ")[/orange_red1] " + val
+            if "loop_command" in val:
+                command = val["loop_command"]
+            else:
+                command = val
             # commands_cols.append( Panel(cmd_detail( title ), expand=True, padding=[-1, -1], box=box.MINIMAL))
-            commands_cols.append( cmd_detail( title ))
-        print(Panel(Columns(commands_cols, expand=True, padding = [0,0]), title="commands", title_align="left", border_style="orange_red1"))
+            if self.C_ACTION_SEARCH != "" and command.find(self.C_ACTION_SEARCH) == -1:
+                continue
+            # rewrite command by it's title if it is set
+            if self.C_ACTION_SEARCH == "" and "title" in val:
+                command = "*" + val["title"]
+            command_key = key + 1
+            commands_cols.append( cmd_detail( command, command_key))
+        title = "Commnads //" + self.C_ACTION_SEARCH
+        print(Panel(Columns(commands_cols, expand=True, padding = [0,0]), title=f"{title}", title_align="left", border_style="orange_red1"))
 
-        # print("")
-        # print("[deep_pink4]" + ("=" * 100) + "[/deep_pink4]")
 
     def run_system(self, action):
         os.system(action)
         if len(action) > 2:
             readline.write_history_file(self.history_file)
 
-    def run_command(self, command_key, item_key):
+    def get_command_by_index(self, command_key):
+        command_num = int(command_key)
+        run_cmd_c = self.C_COMMANDS[command_num - 1]
+
+        if type(run_cmd_c) is dict:
+            if "before_command" in run_cmd_c:
+                before_command_cmd = run_cmd_c["before_command"]
+            else:
+                before_command_cmd = ""
+            if "after_command" in run_cmd_c:
+                after_command_cmd = run_cmd_c["after_command"]
+            else:
+                after_command_cmd = ""
+            run_cmd = run_cmd_c["loop_command"]
+        else:
+            before_command_cmd = ""
+            after_command_cmd = ""
+            run_cmd = run_cmd_c
+        run_cmd = str(run_cmd).strip()
+
+
+        return before_command_cmd, run_cmd, after_command_cmd
+
+
+    def is_interactive_command(self, command):
+        interactive_commands = ["ssh", "docker exec -it", "vim", "nano", "zpcli", "ping"] 
+        ssh_pattern = r"ssh\s+\S+@\S+" 
+        docker_pattern = r"docker exec -it\s+\S+ bash" 
+        if re.match(ssh_pattern, command) and len(command) > re.match(ssh_pattern, command).end():
+            return False
+        elif re.match(docker_pattern, command) and len(command) > re.match(docker_pattern, command).end():
+            return False
+        else:
+            return any(word in command for word in interactive_commands)
+
+
+    def run_command(self, run_cmd, item_key):
         """ run command """
         print("[deep_pink4]" + ("v" * 100) + "[/deep_pink4]")
         print("[deep_pink4]" + ("=" * 100) + "[/deep_pink4]")
 
-        command_num = int(command_key)
-        run_cmd = str(self.C_COMMANDS[command_num - 1]).strip()
+
+        print(run_cmd)
 
         arg_command, arg_actions, arg_param1, arg_param2 = self.get_params()
         # replace zpcli params to action command
@@ -448,8 +462,9 @@ class Zpcli:
                     input_loop = False
                     return can_continue
 
-            if self.C_VARIABLES["command-wrapper"] and self.C_VARIABLES["cw-enabled"]:
+            if self.C_VARIABLES["command-wrapper"] and self.C_TMUX_SPLIT == True:
                 run_cmd = self.C_VARIABLES["command-wrapper"].replace("<command>", run_cmd)
+                print(run_cmd)
 
             # print(self.C_VARIABLES["SUM"])
             if self.C_MODIFY_COMMAND:
@@ -461,31 +476,62 @@ class Zpcli:
             else:
                 confirm = "y"
 
+            output = ""
             if confirm == "y":
-                # process = subprocess.run(command_arr, cwd="/home")
-                if run_cmd.startswith("ssh ") and run_cmd.find('"') != -1:
-                    ssh_args = run_cmd[4:].split('"')
-                    ssh = subprocess.run(["ssh", ssh_args[0].strip(), ssh_args[1].strip()],
-                                         shell=False,
-                                         stdout=subprocess.PIPE,
-                                         stderr=subprocess.PIPE)
-                    output = str(ssh.stdout.decode("utf-8"))
-                else:
-                    # output = os.system(run_cmd + ' | tee -a /tmp/zpcli-output')
-                    output = os.system(run_cmd)
+                try:
+                    if self.is_interactive_command(run_cmd):
+                        subprocess.run(run_cmd, shell=True)
+                    else:
+                        cmd_lines = run_cmd.split("\n")
+                        cmd_lines_cnt = len(run_cmd.split("\n"))
+                        if cmd_lines_cnt > 1:
+                            i = 0
+                            while i < cmd_lines_cnt:
+                                try:
+                                    output = output + "\n>> "  + cmd_lines[i] + "\n"
+                                    output = output + subprocess.check_output(cmd_lines[i], shell=True, text=True)
+                                except:
+                                    pass
+                                i = i + 1
+                        else:
+                            output = subprocess.check_output(run_cmd, shell=True, text=True)
+                except:
+                    pass
 
                 with open(self.history_file, "a") as f:
                     f.write("\n" + run_cmd)
                 readline.add_history(run_cmd)
 
-                print(output)
+                subStrings = {
+                        # "error": "zpcli_error",
+                        "error": "zpcli_er",
+                        #"err": "orange_red1",
+                        "fail": "zpcli_er",
+                        "warn": "zpcli_wa",
+                        " ok": "zpcli_ok",
+                        #"UP": "zpcli_ok",
+                        #"DOWN": "zpcli_error"
+                }
+
+                x =  escape(output) + " "
+                for word in subStrings:
+                    compiled = re.compile(re.escape(word), re.IGNORECASE)
+                    x = compiled.sub(f"[{subStrings[word]}]{word}[/{subStrings[word]}]", x)
+
+                console = Console(theme=zpcli_highlight)
+                try:
+                    console.print(f"{x}")
+                except:
+                    print(escape(output))
+                    pass
                 if input_loop == False:
                     return can_continue
+
 
     def action_save_config(self):
         conf_file = self.config_file
         with open(conf_file, "w") as config_file:
-            config_file.write(yaml.dump(self.CONFIG))
+            config_file.write(yaml.dump(self.CONFIG, width=float("inf")))
         print("config saved... press Enter...")
         x = input()
 
@@ -512,6 +558,8 @@ ACTIONS:
 :sort 0         disable sorting
 /mystr          search 'mystr' string in the output, by ^ you can filter lines that doesn't containen string ( /^not-this )
 /               remove filter
+//log           search in commands
+//              remove command filter
 :s/search/repl   'search' will be replaced by 'repl' in the output, You can multiple replacement by && (:s/s1/r1/ && s/s2/r2/)
 :s//             remove/reset replacement
 :set var=value  set global variable called "var" with "value" as value. You can use it in your commands as $var then
@@ -562,3 +610,4 @@ git status      run any bash command, you can also use bash history search by Ct
                 result_string = result_string + " " + cols[col_number]
 
         return result_string.strip()
+

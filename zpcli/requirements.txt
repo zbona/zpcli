@@ -1,0 +1,6 @@
+markdown-it-py==3.0.0
+mdurl==0.1.2
+Pygments==2.18.0
+PyYAML==6.0.2
+rich==13.8.1
+gnureadline

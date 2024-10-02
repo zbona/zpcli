@@ -1,4 +1,3 @@
-from colorama import Fore, Back, Style, init
 import readline
 from rich import print
 

@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!python3
 
 from zpcli import Zpcli
 from zpoutput import print_green, print_red, print_yellow, print_gray, print_blue
@@ -33,7 +33,7 @@ def print_status_line(zpcli):
     else:
         panel_content = panel_content + (" [red]|CONFIRM|[/red] ")
     style = "border green"
-    print(Panel(panel_content, title="zpcli", title_align="left", box=box.HORIZONTALS, border_style="deep_pink4"))
+    print(Panel(panel_content, title="(ZPCLI)", title_align="left", box=box.HORIZONTALS, border_style="deep_pink4"))
 
 
 def main():
@@ -61,15 +61,20 @@ def main():
 
         zpcli.load_variables()
 
-        print_status_line(zpcli)
+        # print_status_line(zpcli)
         print_list_items(zpcli)
         print_status_line(zpcli)
 
         zpcli.print_commands(arg_command)
         action = zpcli.input_action().strip()
 
+        zpcli.C_TMUX_SPLIT = False
         action_key = 0
-        if action[0] == "/":
+        if action.startswith( "//" ):
+            """ search  """
+            zpcli.C_ACTION_SEARCH = action[2:]
+            continue
+        elif action[0] == "/":
             """ search  """
             zpcli.C_SEARCH = action[1:]
             continue
@@ -91,6 +96,10 @@ def main():
             """ add action command to runtime """
             zpcli.remove_action_command(action[1:])
             continue
+        elif action[0] == "%":
+            """ add action command to runtime """
+            zpcli.C_TMUX_SPLIT = True
+            action_key = action[1:]
         elif action[0] == "?":
             """ add action command to runtime """
             commands = zpcli.search_commnad_config(arg_command)["actions"]
@@ -115,27 +124,53 @@ def main():
                 input()
                 continue
 
-        items = zpcli.input_items()
-        if items[0] == "q":
-            sys.exit()
+        current_command = zpcli.C_COMMANDS[int(action_key) - 1]
 
-        if items == ["*"]:
-            zpcli.C_LAST_ITEM = []
-            items = []
-            for i in zpcli.C_SELECTED_COMMAND_ITEMS.keys():
-                items.append(i)
-                zpcli.C_LAST_ITEM.append(str(i))
+        ask_for_items = True
+        if type(current_command) is dict and "loop_command" in current_command and current_command["loop_command"].find("$") == -1:
+            ask_for_items = False
+        elif type(current_command) is str and current_command.find("$") == -1:
+            ask_for_items = False
+            
+        # don't ask items if variable is not used in the command
+        if ask_for_items:
+            items = zpcli.input_items()
+            if items[0] == "q":
+                sys.exit()
+
+            if items == ["*"]:
+                zpcli.C_LAST_ITEM = []
+                items = []
+                for i in zpcli.C_SELECTED_COMMAND_ITEMS.keys():
+                    items.append(i)
+                    zpcli.C_LAST_ITEM.append(str(i))
+        else:
+            items = [1]
 
         zpcli.C_VARIABLE_CONFIRMED = False
+        before_command_cmd, loop_command_cmd, after_command_cmd = zpcli.get_command_by_index(action_key)
+
+        if before_command_cmd != "":
+            print("Running command before:")
+            print("> " + before_command_cmd)
+            output = os.system(before_command_cmd)
+            print(output)
+
         for item_key in items:
             try:
-                can_continue = zpcli.run_command(action_key, item_key)
+                can_continue = zpcli.run_command(loop_command_cmd, item_key)
                 if can_continue == False:
                     break
                 else:
                     zpcli.C_VARIABLE_CONFIRMED = True
             except Exception as exc:
                 print(exc)
+
+        if after_command_cmd != "":
+            print("Running command after:")
+            print("> "+ after_command_cmd)
+            output = os.system(after_command_cmd)
+            print(output)
 
         print("... press Enter to continue ...")
         x = input()
