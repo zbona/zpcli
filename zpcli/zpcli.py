@@ -2,6 +2,7 @@ import os
 import subprocess
 import re
 import sys
+import shutil
 
 import yaml
 from zpoutput import print_green, print_red, print_yellow, print_gray, print_blue, get_highlighted, rlinput
@@ -30,6 +31,7 @@ zpcli_highlight = Theme({
 
 class Zpcli:
     C_LIST_COMMAND = ""
+    C_LIST_COMMAND_NAME = ""
     C_COMMAND_ITEMS = {}
     C_SELECTED_COMMAND_ITEMS = {}
     C_REPLACED_COMMAND_ITEMS = []
@@ -111,9 +113,9 @@ class Zpcli:
         print("> " + os.getcwd())
         print_red("Action ", False)
         print_gray(" - Press ENTER to use last action ", False)
-        print_red("\[" + self.C_LAST_ACTION + "]: ", False)
+        print_red("\[" + self.C_LAST_ACTION + "]: ")
 
-        readline.set_completer_delims('\t')
+        # readline.set_completer_delims(' \t\n')
         readline.parse_and_bind("tab: complete")
 
         with open(self.history_file, "r") as h_file:
@@ -125,16 +127,33 @@ class Zpcli:
 
         readline.set_completer(self.zpcli_complete)
         readline.set_completer_delims('')
+        # readline.set_completer_delims(' \t\n')
 
         action = input()
 
-        print(action)
-
-        if action == "":
+        if action == " ":
+            action = self.select_item( self.get_comands_dict() )
+            # print(action)
+            # sys.exit()
+        elif action == "":
             action = self.C_LAST_ACTION
         else:
             self.C_LAST_ACTION = action
         return action
+
+
+    def get_comands_dict(self):
+        # print(self.C_COMMANDS)
+        my_dict = {}
+        i = 1
+        for commnd in self.C_COMMANDS:
+            if "loop_command" in self.C_COMMANDS[int(i-1)]:
+                my_dict[str(i)] = commnd["loop_command"]
+            else:
+                my_dict[str(i)] = commnd
+            i = i + 1
+        return my_dict
+
 
     def get_params(self):
         return self.params["arg_command"], self.params["arg_actions"], self.params["arg_param1"], self.params[
@@ -153,7 +172,12 @@ class Zpcli:
             print(it)
             for i in it:
                 item = item + " " + str(i)
-        if item == "":
+        if item == " ":
+            item = self.select_item(self.C_COMMAND_ITEMS)
+            # print(item)
+            # sys.exit()
+            print()
+        elif item == "":
             item = " ".join(self.C_LAST_ITEM)
             print()
         else:
@@ -175,11 +199,24 @@ class Zpcli:
 
     def search_commnad_config(self, list_command):
         for lc in self.CONFIG["commands"]:
+            if "name" in lc and lc["name"] == list_command:
+                self.C_LIST_COMMAND_NAME = list_command
+                return lc
+            if "name" in lc and lc["name"] == self.C_LIST_COMMAND_NAME:
+                return lc
+        for lc in self.CONFIG["commands"]:
             if lc["list-command"] == list_command:
                 return lc
-        command = {"list-command": list_command, "actions": ["aaa"]}
+        command = {"list-command": list_command, "actions": ["Not found"]}
         self.CONFIG["commands"].append(command)
         return command
+
+    def replace_command_config(self):
+        for i in range(len(self.CONFIG["commands"])):
+            if self.CONFIG["commands"][i]["list-command"] == self.C_LIST_COMMAND:
+                self.CONFIG["commands"][i]["replace"] = str(self.C_REPLACE)
+                self.CONFIG["commands"][i]["separator"] = str(self.C_SEPARATOR)
+                self.CONFIG["commands"][i]["search"] = str(self.C_SEARCH)
 
     def action_sort(self, column):
         # print(self.C_SORT)
@@ -284,17 +321,34 @@ class Zpcli:
                         line = re.sub(replace_list[1].replace("[escaped-slash]", "/"),
                                       replace_list[2].replace("[escaped-slash]", "/"), line)
                         self.C_REPLACED_COMMAND_ITEMS.append(i)
+
             if self.C_SEARCH != "":
-                if self.C_SEARCH[0] == "^":
-                    not_matched_words = self.C_SEARCH[1:].split("|")
-                    match_search = True
+                match_search_present = False
+                match_search_absent = True
+                if self.C_SEARCH.find("^") != -1:
+                    my_search = self.C_SEARCH.split("^")
+                else:
+                    my_search = [self.C_SEARCH, ""]
+
+                if my_search[0] == "":
+                    match_search_present = True
+                elif my_search[0].find("|") != -1:
+                    matched_words = my_search[0].split("|")
+                    for word in matched_words:
+                        if line.find(word) != -1:
+                            match_search_present = match_search_present or True
+                            # break
+                else:
+                    match_search_present = bool(re.match(".*" + my_search[0] + ".*", line))
+
+                if my_search[1] != "":
+                    not_matched_words = my_search[1].split("|")
                     for word in not_matched_words:
                         if line.find(word) != -1:
-                            match_search = False
-                            break
-                else:
-                    match_search = re.match(".*" + self.C_SEARCH + ".*", line)
-                if match_search:
+                            match_search_absent = match_search_absent and False
+
+
+                if match_search_present and match_search_absent:
                     current_lines[i] = line
             else:
                 current_lines[i] = line
@@ -402,7 +456,7 @@ class Zpcli:
 
 
     def is_interactive_command(self, command):
-        interactive_commands = ["ssh", "docker exec -it", "vim", "nano", "zpcli", "ping"] 
+        interactive_commands = ["ssh", "kubectl exec -it", "docker exec -it", "vim", "nano", "zpcli", "ping"] 
         ssh_pattern = r"ssh\s+\S+@\S+" 
         docker_pattern = r"docker exec -it\s+\S+ bash" 
         if re.match(ssh_pattern, command) and len(command) > re.match(ssh_pattern, command).end():
@@ -410,7 +464,10 @@ class Zpcli:
         elif re.match(docker_pattern, command) and len(command) > re.match(docker_pattern, command).end():
             return False
         else:
-            return any(word in command for word in interactive_commands)
+            for i in interactive_commands:
+                if command.find(i) != -1:
+                    return True
+        return False
 
 
     def run_command(self, run_cmd, item_key):
@@ -466,10 +523,6 @@ class Zpcli:
                 run_cmd = self.C_VARIABLES["command-wrapper"].replace("<command>", run_cmd)
                 print(run_cmd)
 
-            # print(self.C_VARIABLES["SUM"])
-            if self.C_MODIFY_COMMAND:
-                run_cmd = rlinput("> ", run_cmd)
-
             if self.C_CONFIRM:
                 print_red("Realy run: " + run_cmd + " ? y/n")
                 confirm = input()
@@ -480,8 +533,10 @@ class Zpcli:
             if confirm == "y":
                 try:
                     if self.is_interactive_command(run_cmd):
+                        print("run-interactive")
                         subprocess.run(run_cmd, shell=True)
                     else:
+                        print("run-get-output")
                         cmd_lines = run_cmd.split("\n")
                         cmd_lines_cnt = len(run_cmd.split("\n"))
                         if cmd_lines_cnt > 1:
@@ -565,6 +620,9 @@ ACTIONS:
 :set var=value  set global variable called "var" with "value" as value. You can use it in your commands as $var then
 :set-local v=x  set LOCAL variable called "v" with "x" as value. This value is used just for current zpcli instance
 :get            get all set variables
+%4              Runs action command 4 wrapped by $command-wrapper variable E.g. open action command in new plitted window in tmux
+                :set commapnd-wrapper= tmux split-window -v 'bash -c "<command>"' (<command> will be replaced by action command #4)
+
 +cat $1 $2 $var action command will be added to commands taken from yaml configuration (just for this time)
                 $1 - will be replaced by value in 1st column of selected item(s)
                 $2 - will be replaced by value in 2nd column of selected item(s)
@@ -588,7 +646,18 @@ git status      run any bash command, you can also use bash history search by Ct
         x = input()
 
     def read_conf(self):
+        global_config_file = "/usr/local/bin/zpcli/zpcli.yaml"
         """ read configuration """
+        if not os.path.isfile(self.config_file):
+            if os.path.isfile(global_config_file):
+                shutil.copy2(global_config_file, self.config_file)
+            else:
+                with open(self.config_file, "w") as cf_file:
+                    cf_file.write("commands:\n")
+                    cf_file.write("- list-command: ls\n")
+                    cf_file.write("  actions:\n")
+                    cf_file.write("    - cat $1:\n")
+
         try:
             with open(self.config_file, "r") as file:
                 config = yaml.safe_load(file)
@@ -610,4 +679,19 @@ git status      run any bash command, you can also use bash history search by Ct
                 result_string = result_string + " " + cols[col_number]
 
         return result_string.strip()
+
+    def select_item(self, items):
+        """
+        Umožňuje vybrat více položek ze slovníku pomocí fzf a vrací seznam odpovídajících klíčů.
+        Slovník by měl být ve formátu {<int>: <string>}.
+        """
+        process = subprocess.Popen(['fzf', '-m', '--height=10'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        output, _ = process.communicate('\n'.join(items.values()))
+        selected_values = output.strip().split('\n')
+        selected_keys = ""
+        for key, value in items.items():
+          if value in selected_values:
+            selected_keys = selected_keys + " " + str(key)
+        return selected_keys
+
 

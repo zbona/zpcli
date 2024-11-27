@@ -43,8 +43,14 @@ def main():
     just_opened = True
 
     arg_command, arg_actions, arg_param1, arg_param2 = get_params(zpcli)
+
+    print(arg_command)
+
+
     if arg_command == "":
+        # arg_command = "awk '/name:/ {a=$2} /list-command:/ {print \"name=\" a \", list-command=\" $2}' " + zpcli.config_file
         arg_command = "grep list-command " + zpcli.config_file
+        zpcli.C_LIST_COMMAND = arg_command
     zpcli.params = {
         "arg_command": arg_command,
         "arg_actions": arg_actions,
@@ -65,7 +71,7 @@ def main():
         print_list_items(zpcli)
         print_status_line(zpcli)
 
-        zpcli.print_commands(arg_command)
+        zpcli.print_commands(zpcli.C_LIST_COMMAND)
         action = zpcli.input_action().strip()
 
         zpcli.C_TMUX_SPLIT = False
@@ -80,6 +86,8 @@ def main():
             continue
         elif action.startswith("!"):
             zpcli.C_LIST_COMMAND = action[1:]
+            zpcli.C_LIST_COMMAND_NAME = action[1:]
+            init_config(zpcli, zpcli.C_LIST_COMMAND_NAME, True)
             continue
         elif action.startswith(":s/"):
             """ sed - substitute """
@@ -107,10 +115,6 @@ def main():
             print( "... Press Enter to continue ...")
             AAA = input()
             continue
-        elif action[0] == "!":
-            """ modify command befire run """
-            zpcli.C_MODIFY_COMMAND = True
-            action_key = int(action[1:])
         elif action == "q":
             """ exit """
             sys.exit()
@@ -189,6 +193,7 @@ def zpcli_commands(zpcli, action):
     elif action[1:] == "uniq":
         zpcli.action_uniq()
     elif action[1:] == "save-config":
+        zpcli.replace_command_config()
         zpcli.action_save_config()
     elif action[1:] == "config":
         os.system("vim " + zpcli.config_file)
@@ -250,6 +255,12 @@ def get_params(zpcli):
             arg_command = sys.argv[1]
         else:
             arg_command = "grep list-command " + zpcli.config_file
+
+    found_comand = zpcli.search_commnad_config(arg_command)
+    zpcli.C_LIST_COMMAND = arg_command = found_comand["list-command"]
+    # print(found_comand)
+    # print(arg_command)
+
     if len(sys.argv) > 2:
         arg_actions = sys.argv[2]
     else:
