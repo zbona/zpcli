@@ -12,6 +12,7 @@ from rich.color import ColorType
 from rich.panel import Panel
 
 
+
 def print_list_items(zpcli):
     arg_command, arg_actions, arg_param1, arg_param2 = get_params(zpcli)
     zpcli.process_list_lines(arg_command, arg_param1, arg_param2)
@@ -72,7 +73,16 @@ def main():
         print_status_line(zpcli)
 
         zpcli.print_commands(zpcli.C_LIST_COMMAND)
-        action = zpcli.input_action().strip()
+        action = zpcli.input_action()
+        if action == " ":
+            action = zpcli.input_action_fzf()
+
+        if not action:
+            continue
+
+        action = action.strip()
+
+        is_custom_command = False
 
         zpcli.C_TMUX_SPLIT = False
         action_key = 0
@@ -108,6 +118,11 @@ def main():
             """ add action command to runtime """
             zpcli.C_TMUX_SPLIT = True
             action_key = action[1:]
+        elif action[0:3] == "ai ":
+            zpcli.ai_prompt(action[3:])
+            print( "... Press Enter to continue ...")
+            input()
+            continue
         elif action[0] == "?":
             """ add action command to runtime """
             commands = zpcli.search_commnad_config(arg_command)["actions"]
@@ -123,19 +138,19 @@ def main():
                 """ run normal action """
                 action_key = action
             else:
-                zpcli.run_system(action)
-                print("... press Enter to continue ...")
-                input()
-                continue
+                is_custom_command = True
 
-        current_command = zpcli.C_COMMANDS[int(action_key) - 1]
+        if is_custom_command:
+            before_command_cmd = ""
+            loop_command_cmd = action
+            after_command_cmd = ""
+        else:
+            before_command_cmd, loop_command_cmd, after_command_cmd = zpcli.get_command_by_index(action_key)
 
         ask_for_items = True
-        if type(current_command) is dict and "loop_command" in current_command and current_command["loop_command"].find("$") == -1:
+        if loop_command_cmd.find("$") == -1:
             ask_for_items = False
-        elif type(current_command) is str and current_command.find("$") == -1:
-            ask_for_items = False
-            
+
         # don't ask items if variable is not used in the command
         if ask_for_items:
             items = zpcli.input_items()
@@ -152,7 +167,6 @@ def main():
             items = [1]
 
         zpcli.C_VARIABLE_CONFIRMED = False
-        before_command_cmd, loop_command_cmd, after_command_cmd = zpcli.get_command_by_index(action_key)
 
         if before_command_cmd != "":
             print("Running command before:")

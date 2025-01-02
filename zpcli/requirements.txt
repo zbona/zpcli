@@ -4,3 +4,4 @@ Pygments==2.18.0
 PyYAML==6.0.2
 rich==13.8.1
 gnureadline
+pyfzf

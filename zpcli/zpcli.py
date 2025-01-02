@@ -1,3 +1,4 @@
+from curses.ascii import EM, isdigit
 import os
 import subprocess
 import re
@@ -14,9 +15,11 @@ from rich.panel import Panel
 from rich import box
 from rich.markup import escape
 import gnureadline as readline
+import pyfzf
 
 import logging
 from rich import print
+
 
 LOG_FILENAME = '/tmp/completer.log'
 logging.basicConfig(filename=LOG_FILENAME,
@@ -54,6 +57,7 @@ class Zpcli:
     C_ZPCLI_COMMANDS = [":help", ":set", ":set-local", ":get", ":sort", ":sep=", ":confirm", ":save-config", "q",
                         ":cd", ":pwd", ":var"
                         ":noconfirm", ":config", "/", ":s//", "+cat $1"]
+    AI_SUMARIZE = True
     CONFIG = {}
     config_file = ""
     variable_file = ""
@@ -66,6 +70,7 @@ class Zpcli:
         self.variable_file = os.path.expanduser("~") + "/.zpcli-vars.yaml"
         readline.read_history_file(os.path.expanduser("~") + '/.bash_history')
         self.history_file = os.path.expanduser("~") + '/.bash_history'
+
 
     def list_folder(self, path):
         """
@@ -80,6 +85,7 @@ class Zpcli:
         else:
             # relative path
             contents = os.listdir(os.curdir)
+
         return contents
 
 
@@ -105,6 +111,24 @@ class Zpcli:
         logging.debug("state %s", state)
         return results[state]
 
+    def input_action_fzf(self):
+        all_actions = self.get_comands_dict() #  (self.C_ZPCLI_COMMANDS)
+        prompt_options = []
+        for my_action in all_actions:
+            item = str(my_action) + ") " + all_actions[my_action]
+            prompt_options.append(item)
+
+        fzf = pyfzf.FzfPrompt()
+        action = fzf.prompt(prompt_options, fzf_options='--height 5 --layout=reverse')
+
+        if not action:
+          return_action = ""
+        elif isdigit(action[0][0]):
+          tmp = action[0][0].split(")", 1)
+          return_action = tmp[0]
+        else:
+          return_action = action[0]
+        return return_action
 
     def input_action(self):
         """ input action """
@@ -131,13 +155,9 @@ class Zpcli:
 
         action = input()
 
-        if action == " ":
-            action = self.select_item( self.get_comands_dict() )
-            # print(action)
-            # sys.exit()
-        elif action == "":
+        if action == "":
             action = self.C_LAST_ACTION
-        else:
+        elif action != " ":
             self.C_LAST_ACTION = action
         return action
 
@@ -275,7 +295,6 @@ class Zpcli:
             list_command = list_command.replace("$list-param2", self.C_VARIABLES["list-param2"])
 
         if list_command.startswith("ssh "):
-
             ssh_args = list_command[4:].split('"')
             ssh = subprocess.run(["ssh", ssh_args[0].strip(), ssh_args[1].strip()],
                                  shell=False,
@@ -294,6 +313,7 @@ class Zpcli:
                 list_command_arr.append(p2)
         try:
             process = subprocess.Popen(list_command_arr, stdout=subprocess.PIPE)
+            # process2 = subprocess.Popen(["grep", "-t"], stdin=process.stdout, stdout=subprocess.PIPE)
             output = process.communicate()[0].decode("utf-8")
             outputLines = output.split(os.linesep)
         except Exception as ex:
@@ -375,6 +395,7 @@ class Zpcli:
 
         for i in self.C_SELECTED_COMMAND_ITEMS:
             line = self.C_SELECTED_COMMAND_ITEMS[i]
+            line = line.replace("\t", " ")
             if i in self.C_REPLACED_COMMAND_ITEMS:
                 star = ":brown_circle:"
             else:
@@ -407,7 +428,7 @@ class Zpcli:
                 # cmd = cmd[0:50] + "\n" + cmd[50:]
                 cmd = cmd[0:50] + "..."
             return f"[{color}]" + str(command_key) + f")[/{color}] " + cmd + " "
-        
+
         commands_cols = [] # [Panel(xxx(p_cmd), expand = True) for p_cmd in commands]
         for key, val in enumerate(commands):
             if "loop_command" in val:
@@ -456,9 +477,9 @@ class Zpcli:
 
 
     def is_interactive_command(self, command):
-        interactive_commands = ["ssh", "kubectl exec -it", "docker exec -it", "vim", "nano", "zpcli", "ping"] 
-        ssh_pattern = r"ssh\s+\S+@\S+" 
-        docker_pattern = r"docker exec -it\s+\S+ bash" 
+        interactive_commands = ["ssh", "kubectl exec -it", "docker exec -it", "vim", "nano", "zpcli", "ping"]
+        ssh_pattern = r"ssh\s+\S+@\S+"
+        docker_pattern = r"docker exec -it\s+\S+ bash"
         if re.match(ssh_pattern, command) and len(command) > re.match(ssh_pattern, command).end():
             return False
         elif re.match(docker_pattern, command) and len(command) > re.match(docker_pattern, command).end():
@@ -509,6 +530,17 @@ class Zpcli:
         while input_loop:
             input_loop = False
             print("Run command: " + get_highlighted(run_cmd, '$input'))
+            if run_cmd_orig.find("$finput") != -1:
+                my_path = ""
+                if "filepath" in self.C_VARIABLES:
+                    my_input = subprocess.check_output("fzf --preview 'batcat {}'", shell=True, text=True, cwd=self.C_VARIABLES["filepath"])
+                    my_input = self.C_VARIABLES["filepath"] + "/" + my_input
+                else:
+                    my_input = subprocess.check_output("fzf --preview 'batcat {}'", shell=True, text=True)
+
+                if (my_input):
+                    run_cmd = run_cmd_orig.replace("$finput", my_input)
+                    input_loop = False
             if run_cmd_orig.find("$input") != -1:
                 print(get_highlighted("Specify $input", "$input"))
                 my_input = input()
@@ -568,6 +600,9 @@ class Zpcli:
                         #"DOWN": "zpcli_error"
                 }
 
+                with open("/tmp/zpcli-last-output.log", "w") as f_out:
+                    f_out.write(output)
+
                 x =  escape(output) + " "
                 for word in subStrings:
                     compiled = re.compile(re.escape(word), re.IGNORECASE)
@@ -579,6 +614,9 @@ class Zpcli:
                 except:
                     print(escape(output))
                     pass
+                if self.C_VARIABLES["ai-summary"] == "yes":
+                    os.system("ai s /tmp/zpcli-last-output.log")
+
                 if input_loop == False:
                     return can_continue
 
@@ -629,7 +667,7 @@ ACTIONS:
                 $var - will be replaced by value od var variable (see above)
 -cat $1 $2 $var action command will be reomved from action list
 :save-config    save current config - adds new commands added above permanently
-q               quit zpcli 
+q               quit zpcli
 
 ITEMS:
 12              run action for item "12:"
@@ -693,5 +731,3 @@ git status      run any bash command, you can also use bash history search by Ct
           if value in selected_values:
             selected_keys = selected_keys + " " + str(key)
         return selected_keys
-
-
